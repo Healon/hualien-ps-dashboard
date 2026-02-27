@@ -306,10 +306,8 @@ dff_fall = df_fall_base[
     (df_fall_base["年月"] >= start_m) & (df_fall_base["年月"] <= end_m)
 ].copy()
 
-# ── 診斷特徵分析資料：時間 + 科別篩選（與兩個篩選器連動）
-dff_dx = df_all[
-    (df_all["年月"] >= start_m) & (df_all["年月"] <= end_m)
-].copy()
+# ── 診斷特徵分析資料：完全繼承主篩選器（時間+單位+類別+SAC）+ 科別篩選
+dff_dx = dff.copy()   # dff 已套用所有主篩選器
 if sel_dept != "全部科別":
     dff_dx = dff_dx[dff_dx["病人/住民-所在科別"] == sel_dept]
 
@@ -399,6 +397,8 @@ if dff.empty:
     st.markdown('<div style="background:#FFF3CD;border-left:4px solid #F39C12;padding:10px 14px;border-radius:4px;color:#7D4700;font-size:13px">⚠️ 目前篩選條件下無資料，請調整側邊欄設定。</div>', unsafe_allow_html=True)
     st.stop()
 
+
+
 # ── 年度比較區塊 ─────────────────────────────────────────
 st.markdown('<div class="chart-container">', unsafe_allow_html=True)
 st.markdown(f"""
@@ -463,11 +463,10 @@ with mk3:
         f"{delta_mid:+.2f}% vs 2024（{v24_mid:.2f}%）",
     ), unsafe_allow_html=True)
 with mk4:
-    delta_harm = harm25_est - n24_harm
-    est_note = f"推估截至{_harm25_last_m}月" if _harm25_last_m < 12 else "2025實際"
+    delta_harm = n25_harm - n24_harm
     st.markdown(_metric_card(
         "🚨 傷害行為年件數",
-        f"{harm25_est} 件",
+        f"{n25_harm} 件",
         delta_harm,
         f"{delta_harm:+d} 件 vs 2024（{n24_harm}件）",
         up_is_bad=True,
@@ -549,7 +548,7 @@ st.plotly_chart(fig_yr1, use_container_width=True)
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# ── 圖②：各科別 2024 vs 2025 推估 分組橫條圖 ────────────
+# ── 圖②：各科別 2024 vs 2025 分組橫條圖 ────────────
 st.markdown('<p class="section-title">② 各科別跌倒件數：2024 vs 2025</p>',
             unsafe_allow_html=True)
 
@@ -560,43 +559,37 @@ cmp_data = []
 for dept in CMP_DEPTS:
     n24 = (_fb24[DEPT_COL_YR] == dept).sum()
     n25 = (_fb25[DEPT_COL_YR] == dept).sum()
-    est25 = round(n25 / last_m25_fb * 12)
-    cmp_data.append({"科別": dept, "2024實際": n24,
-                     "2025推估": est25, "2025實際": n25})
-df_cmp = pd.DataFrame(cmp_data).sort_values("2024實際", ascending=True)
+    cmp_data.append({"科別": dept, "2024": n24, "2025": n25})
+df_cmp = pd.DataFrame(cmp_data).sort_values("2024", ascending=True)
 
 fig_yr2 = go.Figure()
-# 2024 實際（藍色）
+# 2024（藍色）
 fig_yr2.add_trace(go.Bar(
-    name="2024 實際",
+    name="2024",
     y=df_cmp["科別"],
-    x=df_cmp["2024實際"],
+    x=df_cmp["2024"],
     orientation="h",
     marker_color="#2471A3",
     marker_opacity=0.85,
-    text=df_cmp["2024實際"].astype(str) + " 件",
+    text=df_cmp["2024"].astype(str) + " 件",
     textposition="outside",
     textfont=dict(size=10, color="#1C2833", family="Arial"),
-    hovertemplate="<b>%{y}</b><br>2024 實際：%{x} 件<extra></extra>",
+    hovertemplate="<b>%{y}</b><br>2024：%{x} 件<extra></extra>",
 ))
-# 2025 推估（紅色）
+# 2025（紅色）
 fig_yr2.add_trace(go.Bar(
-    name="2025 全年推估",
+    name="2025",
     y=df_cmp["科別"],
-    x=df_cmp["2025推估"],
+    x=df_cmp["2025"],
     orientation="h",
     marker_color="#C0392B",
     marker_opacity=0.80,
-    text=[f"{v} 件（推估）" for v in df_cmp["2025推估"]],
+    text=df_cmp["2025"].astype(str) + " 件",
     textposition="outside",
     textfont=dict(size=10, color="#C0392B", family="Arial Bold"),
-    customdata=df_cmp["2025實際"],
-    hovertemplate=(
-        "<b>%{y}</b><br>2025 推估：%{x} 件<br>"
-        "2025 目前實際：%{customdata} 件<extra></extra>"
-    ),
+    hovertemplate="<b>%{y}</b><br>2025：%{x} 件<extra></extra>",
 ))
-max_val = max(df_cmp["2024實際"].max(), df_cmp["2025推估"].max())
+max_val = max(df_cmp["2024"].max(), df_cmp["2025"].max())
 fig_yr2.update_layout(
     title=None,
     barmode="group",
@@ -619,15 +612,6 @@ fig_yr2.update_layout(
     margin=dict(t=70, b=60, l=80, r=120),
     hovermode="y unified",
 )
-# 推估說明標注
-if last_m25_fb < 12:
-    fig_yr2.add_annotation(
-        text=f"※ 2025推估 = 目前件數 × 12 ÷ {last_m25_fb}（截至{last_m25_fb}月）",
-        xref="paper", yref="paper", x=0, y=-0.14,
-        showarrow=False,
-        font=dict(size=10, color="#7F8C8D", family="Arial"),
-        align="left",
-    )
 st.plotly_chart(fig_yr2, use_container_width=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
@@ -1274,282 +1258,70 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-
 # ════════════════════════════════════════════════════════════
-#  📝 事件說明特徵萃取分析
-#  資料：dff_fall（已含 extract_fall_features 布林欄位）
-#  篩選器：時間區間 + 科別篩選器連動
+#  圖F：各單位熱力圖
 # ════════════════════════════════════════════════════════════
-FALL_FEAT_NAMES = [
-    "地點_床邊下床","地點_浴廁","地點_走廊行走","地點_椅子輪椅",
-    "機轉_滑倒","機轉_頭暈血壓低","機轉_自行起身未告知","機轉_站不穩腳軟",
-    "發現_護理人員巡視","發現_聲響",
-    "病況_精神症狀","病況_約束相關",
-]
-# 依科別篩選 dff_fall（繼承時間篩選）
-if sel_dept != "全部科別":
-    dff_fall_feat = dff_fall[
-        dff_fall["病人/住民-所在科別"] == sel_dept].copy()
-else:
-    dff_fall_feat = dff_fall.copy()
-
 st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-dept_label_feat = sel_dept if sel_dept != "全部科別" else "全院"
-st.markdown(f"""
-<div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
-            padding:14px 20px;border-radius:8px;margin-bottom:16px'>
-  <h3 style='color:#FFFFFF;margin:0;font-size:17px;font-weight:700'>
-    📝 事件說明特徵萃取分析
-  </h3>
-  <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
-    資料期間：{start_m} ～ {end_m}　科別：{dept_label_feat}
-    　共 {len(dff_fall_feat)} 件跌倒事件
-  </p>
-</div>""", unsafe_allow_html=True)
-
-feat_cols_exist = [f for f in FALL_FEAT_NAMES if f in dff_fall_feat.columns]
-
-if dff_fall_feat.empty or not feat_cols_exist:
-    st.info("目前篩選條件下無跌倒事件說明資料。")
-else:
-    n_total = len(dff_fall_feat)
-
-    # ── 圖1：15 特徵出現件數與佔比（水平橫條，>30% 紅色）────
-    st.markdown('<p class="section-title">① 各特徵出現件數與佔比（由高到低）</p>',
-                unsafe_allow_html=True)
-
-    feat_counts = []
-    for feat in feat_cols_exist:
-        cnt  = int(dff_fall_feat[feat].sum())
-        pct  = round(cnt / n_total * 100, 1)
-        feat_counts.append({"特徵": feat, "件數": cnt, "佔比": pct})
-    df_feat_cnt = (pd.DataFrame(feat_counts)
-                   .sort_values("佔比", ascending=True))   # 水平圖低→高
-
-    bar_clrs1 = ["#C0392B" if r >= 30 else "#3498DB"
-                 for r in df_feat_cnt["佔比"]]
-
-    fig_fe1 = go.Figure(go.Bar(
-        y=df_feat_cnt["特徵"],
-        x=df_feat_cnt["佔比"],
-        orientation="h",
-        marker_color=bar_clrs1,
-        marker_opacity=0.85,
-        text=[f"{r:.2f}%  (n={c})"
-              for r, c in zip(df_feat_cnt["佔比"], df_feat_cnt["件數"])],
-        textposition="outside",
-        textfont=dict(size=10, color="#1C2833", family="Arial"),
-        customdata=df_feat_cnt["件數"],
-        hovertemplate=(
-            "<b>%{y}</b><br>件數：%{customdata}<br>"
-            "佔比：%{x:.2f}%<extra></extra>"
-        ),
-    ))
-    # 30% 參考線
-    fig_fe1.add_vline(
-        x=30, line_dash="dash", line_color="#E74C3C", line_width=1.5,
-        annotation_text="  30%",
-        annotation_position="top right",
-        annotation_font=dict(size=10, color="#E74C3C", family="Arial Bold"),
-    )
-    fig_fe1.update_layout(
-        height=520,
-        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+top_u = dff["單位"].value_counts().head(15).index.tolist()
+um = (dff[dff["單位"].isin(top_u)]
+      .groupby(["年月顯示","單位"]).size().reset_index(name="件數"))
+if not um.empty:
+    hp_piv = um.pivot(index="單位", columns="年月顯示", values="件數").fillna(0)
+    fig_f = go.Figure(go.Heatmap(
+        z=hp_piv.values, x=hp_piv.columns.tolist(), y=hp_piv.index.tolist(),
+        colorscale=[
+            [0.0,"#F4F6F6"],[0.35,"#E6B0AA"],
+            [0.70,"#C0392B"],[1.0,"#78281F"],
+        ],
+        hovertemplate="<b>%{y}</b><br>%{x}<br>件數：%{z:.0f}<extra></extra>",
+        colorbar=dict(
+            title=dict(text="件數", font=dict(size=12, color="#1C2833")),
+            tickfont=dict(size=10, color="#2C3E50"),
+            thickness=15, len=0.8),
+        xgap=1, ygap=1))
+    fig_f.update_layout(
+        title=dict(text="🗺️ 各單位每月事件熱力圖（Top 15）", font=TITLE_FONT),
+        height=460, paper_bgcolor=PAPER_BG,
         xaxis=dict(
-            title=dict(text="佔比 (%)", font=AXIS_TITLE_FONT),
-            tickfont=AXIS_TICK_FONT,
-            range=[0, max(df_feat_cnt["佔比"].max() * 1.35, 45)],
-            gridcolor=GRID_COLOR, griddash="dot", ticksuffix="%",
+            title=dict(text="年月", font=AXIS_TITLE_FONT),
+            tickangle=-45, tickfont=dict(size=9, color="#2C3E50"),
+            showgrid=False,
         ),
         yaxis=dict(
-            title=dict(text="特徵項目", font=AXIS_TITLE_FONT),
-            tickfont=dict(size=11, color="#2C3E50", family="Arial"),
-            automargin=True,
+            title=dict(text="病房 / 單位", font=AXIS_TITLE_FONT),
+            tickfont=dict(size=11, color="#2C3E50"),
         ),
-        margin=dict(t=30, b=60, l=130, r=140),
-    )
-    st.plotly_chart(fig_fe1, use_container_width=True)
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # ── 圖2：「自行起身未告知」各科別比率（分組橫條）─────────
-    st.markdown('<p class="section-title">② 「自行起身未告知」各科別比率比較</p>',
-                unsafe_allow_html=True)
-
-    FOCUS_DEPTS = ["精神科","外科","內科","復健科","護理之家","骨科","其他"]
-    DEPT_COLORS_MAP = {
-        "精神科":  "#C0392B",
-        "外科":    "#3498DB",
-        "內科":    "#27AE60",
-        "復健科":  "#F39C12",
-        "護理之家": "#8E44AD",
-        "骨科":    "#2C3E50",
-        "其他":    "#7F8C8D",
-    }
-
-    getup_feat = "機轉_自行起身未告知"
-    dept_col_f = "病人/住民-所在科別"
-    dept_rate  = []
-    for dept in FOCUS_DEPTS:
-        sub = dff_fall[  # 用全院跌倒資料（只套時間篩選）
-            dff_fall[dept_col_f] == dept]
-        n = len(sub)
-        if n < 3:
-            continue
-        rate = round(sub[getup_feat].sum() / n * 100, 1) if getup_feat in sub else 0
-        dept_rate.append({"科別": dept, "比率": rate, "總件數": n})
-
-    df_dept_rate = pd.DataFrame(dept_rate).sort_values("比率", ascending=True)
-
-    if not df_dept_rate.empty:
-        bar_clrs2 = [DEPT_COLORS_MAP.get(d, "#7F8C8D")
-                     for d in df_dept_rate["科別"]]
-        warn_text = ["⚠️" if r >= 40 else "" for r in df_dept_rate["比率"]]
-
-        fig_fe2 = go.Figure()
-        fig_fe2.add_trace(go.Bar(
-            y=df_dept_rate["科別"],
-            x=df_dept_rate["比率"],
-            orientation="h",
-            marker_color=bar_clrs2,
-            marker_opacity=0.85,
-            text=[f"{r:.2f}% {w}"
-                  for r, w in zip(df_dept_rate["比率"], warn_text)],
-            textposition="outside",
-            textfont=dict(size=11, color="#1C2833", family="Arial"),
-            customdata=df_dept_rate["總件數"],
-            hovertemplate=(
-                "<b>%{y}</b><br>自行起身未告知：%{x:.2f}%<br>"
-                "科別總件數：%{customdata} 件<extra></extra>"
-            ),
-        ))
-        fig_fe2.add_vline(
-            x=40, line_dash="dash", line_color="#E74C3C", line_width=2,
-            annotation_text="  40% 警戒線",
-            annotation_position="top right",
-            annotation_font=dict(size=11, color="#E74C3C", family="Arial Bold"),
-        )
-        fig_fe2.update_layout(
-            height=max(300, len(df_dept_rate) * 52 + 80),
-            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-            xaxis=dict(
-                title=dict(text="自行起身未告知 比率 (%)", font=AXIS_TITLE_FONT),
-                tickfont=AXIS_TICK_FONT,
-                range=[0, max(df_dept_rate["比率"].max() * 1.35, 55)],
-                gridcolor=GRID_COLOR, griddash="dot", ticksuffix="%",
-            ),
-            yaxis=dict(
-                title=dict(text="科別", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
-                automargin=True,
-            ),
-            margin=dict(t=40, b=60, l=80, r=120),
-        )
-        st.plotly_chart(fig_fe2, use_container_width=True)
-
-        warn_depts = df_dept_rate[df_dept_rate["比率"] >= 40]["科別"].tolist()
-        if warn_depts:
-            st.markdown(
-                f'<div style="background:#FFF3CD;border-left:4px solid #F39C12;'
-                f'padding:10px 14px;border-radius:4px;color:#7D4700;font-size:13px">'
-                f'⚠️ <b>{"、".join(warn_depts)}</b> 的「自行起身未告知」比率超過 40%，'
-                f'建議加強病人安全教育與護理巡視頻率。</div>',
-                unsafe_allow_html=True)
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # ── 圖3：地點 × 傷害程度 交叉熱力圖 ────────────────────
-    st.markdown('<p class="section-title">③ 發生地點 × 傷害程度 交叉熱力圖</p>',
-                unsafe_allow_html=True)
-
-    LOC_FEATS = {
-        "床邊下床": "地點_床邊下床",
-        "浴廁":    "地點_浴廁",
-        "走廊行走": "地點_走廊行走",
-        "椅子輪椅": "地點_椅子輪椅",
-    }
-    INJ_ORDER_HM = ["無傷害","輕度","中度","重度","極重度","無法判定傷害嚴重程度"]
-    inj_col_f    = "病人/住民-事件發生後對病人健康的影響程度"
-
-    # 建立地點欄位：取第一個命中的地點，未命中標「其他地點」
-    def get_location(row):
-        for lbl, feat in LOC_FEATS.items():
-            if feat in row and row[feat]:
-                return lbl
-        return None   # 排除無地點標記的資料
-
-    dff_fall_feat2 = dff_fall_feat.copy()
-    dff_fall_feat2["地點"] = dff_fall_feat2.apply(get_location, axis=1)
-    hm_data = dff_fall_feat2[
-        dff_fall_feat2["地點"].notna() &
-        dff_fall_feat2[inj_col_f].notna()
-    ].copy()
-
-    if not hm_data.empty:
-        # 只保留有資料的傷害程度
-        valid_inj = [i for i in INJ_ORDER_HM
-                     if i in hm_data[inj_col_f].unique()]
-        loc_order  = list(LOC_FEATS.keys())
-
-        hm_cross = (hm_data.groupby(["地點", inj_col_f])
-                    .size().reset_index(name="件數"))
-        hm_piv   = (hm_cross.pivot(index=inj_col_f, columns="地點",
-                                    values="件數")
-                    .reindex(index=valid_inj, columns=loc_order)
-                    .fillna(0).astype(int))
-
-        # 格子內文字
-        text_matrix = [[str(v) if v > 0 else "" for v in row]
-                       for row in hm_piv.values]
-
-        fig_fe3 = go.Figure(go.Heatmap(
-            z=hm_piv.values,
-            x=hm_piv.columns.tolist(),
-            y=hm_piv.index.tolist(),
-            text=text_matrix,
-            texttemplate="%{text}",
-            textfont=dict(size=14, color="white", family="Arial Bold"),
-            colorscale=[
-                [0.0, "#F4F6F6"],
-                [0.3, "#AED6F1"],
-                [0.6, "#3498DB"],
-                [1.0, "#1A5276"],
-            ],
-            hovertemplate=(
-                "<b>地點：%{x}</b><br>"
-                "傷害程度：%{y}<br>"
-                "件數：%{z}<extra></extra>"
-            ),
-            colorbar=dict(
-                title=dict(text="件數",
-                           font=dict(size=12, color="#1C2833")),
-                tickfont=dict(size=10, color="#2C3E50"),
-                thickness=14, len=0.7,
-            ),
-            xgap=3, ygap=3,
-        ))
-        fig_fe3.update_layout(
-            height=360,
-            paper_bgcolor=PAPER_BG,
-            plot_bgcolor=PAPER_BG,
-            xaxis=dict(
-                title=dict(text="發生地點", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=12, color="#2C3E50", family="Arial"),
-                side="bottom",
-            ),
-            yaxis=dict(
-                title=dict(text="傷害程度", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
-                automargin=True,
-            ),
-            margin=dict(t=20, b=60, l=110, r=80),
-        )
-        st.plotly_chart(fig_fe3, use_container_width=True)
-        st.caption("💡 格子內數字為該組合的事件件數；顏色越深代表件數越多")
-    else:
-        st.info("目前資料不足以產生交叉熱力圖。")
-
+        margin=dict(t=60, b=80, l=90, r=90))
+    st.plotly_chart(fig_f, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ── 明細表 ───────────────────────────────────────────────────
+with st.expander("📋 查看事件明細資料表", expanded=False):
+    cols = [c for c in [
+        "編號","事件大類","事件類別","發生日期","年月","單位","SAC_num",
+        "發生時段","時段標準","發生者資料-年齡","發生者資料-性別",
+        "病人/住民-事件發生後對病人健康的影響程度(彙總)",
+    ] if c in dff.columns]
+    df_show = dff[cols].copy().rename(columns={
+        "SAC_num":"SAC","事件大類":"類別",
+        "發生者資料-年齡":"年齡","發生者資料-性別":"性別",
+        "病人/住民-事件發生後對病人健康的影響程度(彙總)":"影響程度"})
+
+    def _hl(val):
+        if val in [1, 1.0]:
+            return "background-color:#FADBD8;color:#7B241C;font-weight:bold"
+        elif val in [2, 2.0]:
+            return "background-color:#FDEBD0;color:#784212;font-weight:bold"
+        elif val in [3, 3.0]:
+            return "background-color:#FEF9E7;color:#6D4C00"
+        return "color:#1C2833"
+
+    st.dataframe(df_show.style.applymap(_hl, subset=["SAC"]),
+                 use_container_width=True, height=400)
+    st.caption("🔴 SAC 1 死亡　🟠 SAC 2 重大傷害　🟡 SAC 3 輕中度　⬜ SAC 4 無傷害")
+
+
 
 
 # ════════════════════════════════════════════════════════════
@@ -1871,42 +1643,280 @@ if not unit_stats.empty:
     st.dataframe(top10, use_container_width=True, height=310)
 st.markdown('</div>', unsafe_allow_html=True)
 
+# ════════════════════════════════════════════════════════════
+#  📝 事件說明特徵萃取分析
+#  資料：dff_fall（已含 extract_fall_features 布林欄位）
+#  篩選器：時間區間 + 科別篩選器連動
+# ════════════════════════════════════════════════════════════
+FALL_FEAT_NAMES = [
+    "地點_床邊下床","地點_浴廁","地點_走廊行走","地點_椅子輪椅",
+    "機轉_滑倒","機轉_頭暈血壓低","機轉_自行起身未告知","機轉_站不穩腳軟",
+    "發現_護理人員巡視","發現_聲響",
+    "病況_精神症狀","病況_約束相關",
+]
+# 依科別篩選 dff_fall（繼承時間篩選）
+if sel_dept != "全部科別":
+    dff_fall_feat = dff_fall[
+        dff_fall["病人/住民-所在科別"] == sel_dept].copy()
+else:
+    dff_fall_feat = dff_fall.copy()
 
-# ════════════════════════════════════════════════════════════
-#  圖F：各單位熱力圖
-# ════════════════════════════════════════════════════════════
 st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-top_u = dff["單位"].value_counts().head(15).index.tolist()
-um = (dff[dff["單位"].isin(top_u)]
-      .groupby(["年月顯示","單位"]).size().reset_index(name="件數"))
-if not um.empty:
-    hp_piv = um.pivot(index="單位", columns="年月顯示", values="件數").fillna(0)
-    fig_f = go.Figure(go.Heatmap(
-        z=hp_piv.values, x=hp_piv.columns.tolist(), y=hp_piv.index.tolist(),
-        colorscale=[
-            [0.0,"#F4F6F6"],[0.35,"#E6B0AA"],
-            [0.70,"#C0392B"],[1.0,"#78281F"],
-        ],
-        hovertemplate="<b>%{y}</b><br>%{x}<br>件數：%{z:.0f}<extra></extra>",
-        colorbar=dict(
-            title=dict(text="件數", font=dict(size=12, color="#1C2833")),
-            tickfont=dict(size=10, color="#2C3E50"),
-            thickness=15, len=0.8),
-        xgap=1, ygap=1))
-    fig_f.update_layout(
-        title=dict(text="🗺️ 各單位每月事件熱力圖（Top 15）", font=TITLE_FONT),
-        height=460, paper_bgcolor=PAPER_BG,
+dept_label_feat = sel_dept if sel_dept != "全部科別" else "全院"
+st.markdown(f"""
+<div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
+            padding:14px 20px;border-radius:8px;margin-bottom:16px'>
+  <h3 style='color:#FFFFFF;margin:0;font-size:17px;font-weight:700'>
+    📝 事件說明特徵萃取分析
+  </h3>
+  <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
+    資料期間：{start_m} ～ {end_m}　科別：{dept_label_feat}
+    　共 {len(dff_fall_feat)} 件跌倒事件
+  </p>
+</div>""", unsafe_allow_html=True)
+
+feat_cols_exist = [f for f in FALL_FEAT_NAMES if f in dff_fall_feat.columns]
+
+if dff_fall_feat.empty or not feat_cols_exist:
+    st.info("目前篩選條件下無跌倒事件說明資料。")
+else:
+    n_total = len(dff_fall_feat)
+
+    # ── 圖1：15 特徵出現件數與佔比（水平橫條，>30% 紅色）────
+    st.markdown('<p class="section-title">① 各特徵出現件數與佔比（由高到低）</p>',
+                unsafe_allow_html=True)
+
+    feat_counts = []
+    for feat in feat_cols_exist:
+        cnt  = int(dff_fall_feat[feat].sum())
+        pct  = round(cnt / n_total * 100, 1)
+        feat_counts.append({"特徵": feat, "件數": cnt, "佔比": pct})
+    df_feat_cnt = (pd.DataFrame(feat_counts)
+                   .sort_values("佔比", ascending=True))   # 水平圖低→高
+
+    bar_clrs1 = ["#C0392B" if r >= 30 else "#3498DB"
+                 for r in df_feat_cnt["佔比"]]
+
+    fig_fe1 = go.Figure(go.Bar(
+        y=df_feat_cnt["特徵"],
+        x=df_feat_cnt["佔比"],
+        orientation="h",
+        marker_color=bar_clrs1,
+        marker_opacity=0.85,
+        text=[f"{r:.2f}%  (n={c})"
+              for r, c in zip(df_feat_cnt["佔比"], df_feat_cnt["件數"])],
+        textposition="outside",
+        textfont=dict(size=10, color="#1C2833", family="Arial"),
+        customdata=df_feat_cnt["件數"],
+        hovertemplate=(
+            "<b>%{y}</b><br>件數：%{customdata}<br>"
+            "佔比：%{x:.2f}%<extra></extra>"
+        ),
+    ))
+    # 30% 參考線
+    fig_fe1.add_vline(
+        x=30, line_dash="dash", line_color="#E74C3C", line_width=1.5,
+        annotation_text="  30%",
+        annotation_position="top right",
+        annotation_font=dict(size=10, color="#E74C3C", family="Arial Bold"),
+    )
+    fig_fe1.update_layout(
+        height=520,
+        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
         xaxis=dict(
-            title=dict(text="年月", font=AXIS_TITLE_FONT),
-            tickangle=-45, tickfont=dict(size=9, color="#2C3E50"),
-            showgrid=False,
+            title=dict(text="佔比 (%)", font=AXIS_TITLE_FONT),
+            tickfont=AXIS_TICK_FONT,
+            range=[0, max(df_feat_cnt["佔比"].max() * 1.35, 45)],
+            gridcolor=GRID_COLOR, griddash="dot", ticksuffix="%",
         ),
         yaxis=dict(
-            title=dict(text="病房 / 單位", font=AXIS_TITLE_FONT),
-            tickfont=dict(size=11, color="#2C3E50"),
+            title=dict(text="特徵項目", font=AXIS_TITLE_FONT),
+            tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+            automargin=True,
         ),
-        margin=dict(t=60, b=80, l=90, r=90))
-    st.plotly_chart(fig_f, use_container_width=True)
+        margin=dict(t=30, b=60, l=130, r=140),
+    )
+    st.plotly_chart(fig_fe1, use_container_width=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # ── 圖2：「自行起身未告知」各科別比率（分組橫條）─────────
+    st.markdown('<p class="section-title">② 「自行起身未告知」各科別比率比較</p>',
+                unsafe_allow_html=True)
+
+    FOCUS_DEPTS = ["精神科","外科","內科","復健科","護理之家","骨科","其他"]
+    DEPT_COLORS_MAP = {
+        "精神科":  "#C0392B",
+        "外科":    "#3498DB",
+        "內科":    "#27AE60",
+        "復健科":  "#F39C12",
+        "護理之家": "#8E44AD",
+        "骨科":    "#2C3E50",
+        "其他":    "#7F8C8D",
+    }
+
+    getup_feat = "機轉_自行起身未告知"
+    dept_col_f = "病人/住民-所在科別"
+    dept_rate  = []
+    for dept in FOCUS_DEPTS:
+        sub = dff_fall[  # 用全院跌倒資料（只套時間篩選）
+            dff_fall[dept_col_f] == dept]
+        n = len(sub)
+        if n < 3:
+            continue
+        rate = round(sub[getup_feat].sum() / n * 100, 1) if getup_feat in sub else 0
+        dept_rate.append({"科別": dept, "比率": rate, "總件數": n})
+
+    df_dept_rate = pd.DataFrame(dept_rate).sort_values("比率", ascending=True)
+
+    if not df_dept_rate.empty:
+        bar_clrs2 = [DEPT_COLORS_MAP.get(d, "#7F8C8D")
+                     for d in df_dept_rate["科別"]]
+        warn_text = ["⚠️" if r >= 40 else "" for r in df_dept_rate["比率"]]
+
+        fig_fe2 = go.Figure()
+        fig_fe2.add_trace(go.Bar(
+            y=df_dept_rate["科別"],
+            x=df_dept_rate["比率"],
+            orientation="h",
+            marker_color=bar_clrs2,
+            marker_opacity=0.85,
+            text=[f"{r:.2f}% {w}"
+                  for r, w in zip(df_dept_rate["比率"], warn_text)],
+            textposition="outside",
+            textfont=dict(size=11, color="#1C2833", family="Arial"),
+            customdata=df_dept_rate["總件數"],
+            hovertemplate=(
+                "<b>%{y}</b><br>自行起身未告知：%{x:.2f}%<br>"
+                "科別總件數：%{customdata} 件<extra></extra>"
+            ),
+        ))
+        fig_fe2.add_vline(
+            x=40, line_dash="dash", line_color="#E74C3C", line_width=2,
+            annotation_text="  40% 警戒線",
+            annotation_position="top right",
+            annotation_font=dict(size=11, color="#E74C3C", family="Arial Bold"),
+        )
+        fig_fe2.update_layout(
+            height=max(300, len(df_dept_rate) * 52 + 80),
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(
+                title=dict(text="自行起身未告知 比率 (%)", font=AXIS_TITLE_FONT),
+                tickfont=AXIS_TICK_FONT,
+                range=[0, max(df_dept_rate["比率"].max() * 1.35, 55)],
+                gridcolor=GRID_COLOR, griddash="dot", ticksuffix="%",
+            ),
+            yaxis=dict(
+                title=dict(text="科別", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                automargin=True,
+            ),
+            margin=dict(t=40, b=60, l=80, r=120),
+        )
+        st.plotly_chart(fig_fe2, use_container_width=True)
+
+        warn_depts = df_dept_rate[df_dept_rate["比率"] >= 40]["科別"].tolist()
+        if warn_depts:
+            st.markdown(
+                f'<div style="background:#FFF3CD;border-left:4px solid #F39C12;'
+                f'padding:10px 14px;border-radius:4px;color:#7D4700;font-size:13px">'
+                f'⚠️ <b>{"、".join(warn_depts)}</b> 的「自行起身未告知」比率超過 40%，'
+                f'建議加強病人安全教育與護理巡視頻率。</div>',
+                unsafe_allow_html=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # ── 圖3：地點 × 傷害程度 交叉熱力圖 ────────────────────
+    st.markdown('<p class="section-title">③ 發生地點 × 傷害程度 交叉熱力圖</p>',
+                unsafe_allow_html=True)
+
+    LOC_FEATS = {
+        "床邊下床": "地點_床邊下床",
+        "浴廁":    "地點_浴廁",
+        "走廊行走": "地點_走廊行走",
+        "椅子輪椅": "地點_椅子輪椅",
+    }
+    INJ_ORDER_HM = ["無傷害","輕度","中度","重度","極重度","無法判定傷害嚴重程度"]
+    inj_col_f    = "病人/住民-事件發生後對病人健康的影響程度"
+
+    # 建立地點欄位：取第一個命中的地點，未命中標「其他地點」
+    def get_location(row):
+        for lbl, feat in LOC_FEATS.items():
+            if feat in row and row[feat]:
+                return lbl
+        return None   # 排除無地點標記的資料
+
+    dff_fall_feat2 = dff_fall_feat.copy()
+    dff_fall_feat2["地點"] = dff_fall_feat2.apply(get_location, axis=1)
+    hm_data = dff_fall_feat2[
+        dff_fall_feat2["地點"].notna() &
+        dff_fall_feat2[inj_col_f].notna()
+    ].copy()
+
+    if not hm_data.empty:
+        # 只保留有資料的傷害程度
+        valid_inj = [i for i in INJ_ORDER_HM
+                     if i in hm_data[inj_col_f].unique()]
+        loc_order  = list(LOC_FEATS.keys())
+
+        hm_cross = (hm_data.groupby(["地點", inj_col_f])
+                    .size().reset_index(name="件數"))
+        hm_piv   = (hm_cross.pivot(index=inj_col_f, columns="地點",
+                                    values="件數")
+                    .reindex(index=valid_inj, columns=loc_order)
+                    .fillna(0).astype(int))
+
+        # 格子內文字
+        text_matrix = [[str(v) if v > 0 else "" for v in row]
+                       for row in hm_piv.values]
+
+        fig_fe3 = go.Figure(go.Heatmap(
+            z=hm_piv.values,
+            x=hm_piv.columns.tolist(),
+            y=hm_piv.index.tolist(),
+            text=text_matrix,
+            texttemplate="%{text}",
+            textfont=dict(size=14, color="white", family="Arial Bold"),
+            colorscale=[
+                [0.0, "#F4F6F6"],
+                [0.3, "#AED6F1"],
+                [0.6, "#3498DB"],
+                [1.0, "#1A5276"],
+            ],
+            hovertemplate=(
+                "<b>地點：%{x}</b><br>"
+                "傷害程度：%{y}<br>"
+                "件數：%{z}<extra></extra>"
+            ),
+            colorbar=dict(
+                title=dict(text="件數",
+                           font=dict(size=12, color="#1C2833")),
+                tickfont=dict(size=10, color="#2C3E50"),
+                thickness=14, len=0.7,
+            ),
+            xgap=3, ygap=3,
+        ))
+        fig_fe3.update_layout(
+            height=360,
+            paper_bgcolor=PAPER_BG,
+            plot_bgcolor=PAPER_BG,
+            xaxis=dict(
+                title=dict(text="發生地點", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                side="bottom",
+            ),
+            yaxis=dict(
+                title=dict(text="傷害程度", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                automargin=True,
+            ),
+            margin=dict(t=20, b=60, l=110, r=80),
+        )
+        st.plotly_chart(fig_fe3, use_container_width=True)
+        st.caption("💡 格子內數字為該組合的事件件數；顏色越深代表件數越多")
+    else:
+        st.info("目前資料不足以產生交叉熱力圖。")
+
 st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -2026,33 +2036,6 @@ else:
         st.info("各目標科別件數不足，無法產生熱力矩陣。")
 
 st.markdown('</div>', unsafe_allow_html=True)
-
-
-# ── 明細表 ───────────────────────────────────────────────────
-with st.expander("📋 查看事件明細資料表", expanded=False):
-    cols = [c for c in [
-        "編號","事件大類","事件類別","發生日期","年月","單位","SAC_num",
-        "發生時段","時段標準","發生者資料-年齡","發生者資料-性別",
-        "病人/住民-事件發生後對病人健康的影響程度(彙總)",
-    ] if c in dff.columns]
-    df_show = dff[cols].copy().rename(columns={
-        "SAC_num":"SAC","事件大類":"類別",
-        "發生者資料-年齡":"年齡","發生者資料-性別":"性別",
-        "病人/住民-事件發生後對病人健康的影響程度(彙總)":"影響程度"})
-
-    def _hl(val):
-        if val in [1, 1.0]:
-            return "background-color:#FADBD8;color:#7B241C;font-weight:bold"
-        elif val in [2, 2.0]:
-            return "background-color:#FDEBD0;color:#784212;font-weight:bold"
-        elif val in [3, 3.0]:
-            return "background-color:#FEF9E7;color:#6D4C00"
-        return "color:#1C2833"
-
-    st.dataframe(df_show.style.applymap(_hl, subset=["SAC"]),
-                 use_container_width=True, height=400)
-    st.caption("🔴 SAC 1 死亡　🟠 SAC 2 重大傷害　🟡 SAC 3 輕中度　⬜ SAC 4 無傷害")
-
 
 # ── 頁底 ─────────────────────────────────────────────────────
 st.markdown("---")
