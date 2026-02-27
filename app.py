@@ -412,64 +412,104 @@ st.markdown(f"""
   </p>
 </div>""", unsafe_allow_html=True)
 
-# ── 4個指標卡 ────────────────────────────────────────────
-def _metric_card(label, value, delta_val, delta_txt, up_is_bad=True):
-    """淺色背景指標卡，delta向上為紅（up_is_bad=True）或綠"""
+# ── 4個指標卡（含紅綠燈警示 + Tooltip 定義）────────────────
+def _kpi_card(label, value, delta_val, delta_txt, up_is_bad=True, tooltip=""):
+    """
+    醫療專業 KPI 卡片
+    - 越低越好 (up_is_bad=True)：上升→紅燈、下降→綠燈
+    - 越高越好 (up_is_bad=False)：上升→綠燈、下降→紅燈
+    - tooltip: 右上角懸停說明（分子分母定義）
+    """
     if delta_val > 0:
-        arrow   = "▲"
+        arrow  = "▲"
         d_color = "#C0392B" if up_is_bad else "#1E8449"
-        bg_val  = "#FADBD8" if up_is_bad else "#D5F5E3"
+        d_bg    = "#FADBD8" if up_is_bad else "#D5F5E3"
+        led     = "#E74C3C" if up_is_bad else "#27AE60"   # 左邊指示條顏色
+        status  = "⛔" if up_is_bad else "✅"
     elif delta_val < 0:
-        arrow   = "▼"
+        arrow  = "▼"
         d_color = "#1E8449" if up_is_bad else "#C0392B"
-        bg_val  = "#D5F5E3" if up_is_bad else "#FADBD8"
+        d_bg    = "#D5F5E3" if up_is_bad else "#FADBD8"
+        led     = "#27AE60" if up_is_bad else "#E74C3C"
+        status  = "✅" if up_is_bad else "⛔"
     else:
-        arrow, d_color, bg_val = "─", "#7F8C8D", "#F2F3F4"
+        arrow, d_color, d_bg = "─", "#7F8C8D", "#F2F3F4"
+        led    = "#AEB6BF"
+        status = "➖"
+
+    # 數值字體在指標惡化時加粗強調
+    val_weight = "900" if (up_is_bad and delta_val > 0) or (not up_is_bad and delta_val < 0) else "800"
+    val_color  = "#C0392B" if (up_is_bad and delta_val > 0) else "#1C2833"
+
+    tooltip_html = f"""
+<div class='kpi-tooltip-icon' title='{tooltip}'
+     style='position:absolute;top:10px;right:12px;
+            width:18px;height:18px;background:#EBF5FB;border-radius:50%;
+            display:flex;align-items:center;justify-content:center;
+            font-size:11px;color:#2E86C1;cursor:help;
+            border:1px solid #AED6F1;font-weight:700'>ℹ</div>
+""" if tooltip else ""
+
     return f"""
-<div style='background:#FFFFFF;border:1px solid #D5D8DC;border-radius:10px;
-            padding:16px 18px;box-shadow:0 2px 6px rgba(0,0,0,0.08)'>
-  <div style='font-size:12px;color:#5D6D7E;font-weight:600;margin-bottom:6px'>{label}</div>
-  <div style='font-size:30px;font-weight:900;color:#1C2833;line-height:1.1'>{value}</div>
+<div style='background:#FFFFFF;border-left:5px solid {led};border-radius:10px;
+            padding:16px 18px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.09);
+            position:relative;min-height:110px'>
+  {tooltip_html}
+  <div style='font-size:11px;color:#5D6D7E;font-weight:700;
+              letter-spacing:0.4px;margin-bottom:8px;padding-right:24px'>
+    {status} {label}
+  </div>
+  <div style='font-size:32px;font-weight:{val_weight};color:{val_color};
+              line-height:1.1;letter-spacing:-0.5px'>{value}</div>
   <div style='font-size:11px;font-weight:700;color:{d_color};
-              background:{bg_val};border-radius:4px;
-              padding:3px 7px;display:inline-block;margin-top:6px'>
+              background:{d_bg};border-radius:4px;
+              padding:3px 8px;display:inline-block;margin-top:8px'>
     {arrow} {delta_txt}
   </div>
 </div>"""
 
+# 指標定義 Tooltip
+TOOLTIP_INJ   = "跌倒有傷害率 = 有傷害件數 ÷ 跌倒總件數\n傷害判斷：病人健康影響程度(彙總) = 有傷害"
+TOOLTIP_PSYCH = "精神科跌倒占比 = 精神科跌倒件數 ÷ 全院跌倒總件數"
+TOOLTIP_MID   = "中度以上傷害率 = 外科+內科中，中度/重度/極重度/死亡件數 ÷ 外科+內科跌倒總件數"
+TOOLTIP_HARM  = "傷害行為件數 = 事件大類為「傷害」的通報件數（全院）"
+
 mk1, mk2, mk3, mk4 = st.columns(4)
 with mk1:
-    delta_inj = round(v25_inj - v24_inj, 1)
-    st.markdown(_metric_card(
-        "🩹 跌倒有傷害率",
+    delta_inj = round(v25_inj - v24_inj, 2)
+    st.markdown(_kpi_card(
+        "跌倒有傷害率",
         f"{v25_inj:.2f}%",
         delta_inj,
         f"{delta_inj:+.2f}% vs 2024（{v24_inj:.2f}%）",
+        up_is_bad=True, tooltip=TOOLTIP_INJ,
     ), unsafe_allow_html=True)
 with mk2:
-    delta_psych = round(v25_psych - v24_psych, 1)
-    st.markdown(_metric_card(
-        "🧠 精神科跌倒占比",
+    delta_psych = round(v25_psych - v24_psych, 2)
+    st.markdown(_kpi_card(
+        "精神科跌倒占比",
         f"{v25_psych:.2f}%",
         delta_psych,
         f"{delta_psych:+.2f}% vs 2024（{v24_psych:.2f}%）",
+        up_is_bad=True, tooltip=TOOLTIP_PSYCH,
     ), unsafe_allow_html=True)
 with mk3:
-    delta_mid = round(v25_mid - v24_mid, 1)
-    st.markdown(_metric_card(
-        "⚕️ 中度以上傷害率（外科+內科）",
+    delta_mid = round(v25_mid - v24_mid, 2)
+    st.markdown(_kpi_card(
+        "中度以上傷害率（外科+內科）",
         f"{v25_mid:.2f}%",
         delta_mid,
         f"{delta_mid:+.2f}% vs 2024（{v24_mid:.2f}%）",
+        up_is_bad=True, tooltip=TOOLTIP_MID,
     ), unsafe_allow_html=True)
 with mk4:
     delta_harm = n25_harm - n24_harm
-    st.markdown(_metric_card(
-        "🚨 傷害行為年件數",
+    st.markdown(_kpi_card(
+        "傷害行為年件數",
         f"{n25_harm} 件",
         delta_harm,
         f"{delta_harm:+d} 件 vs 2024（{n24_harm}件）",
-        up_is_bad=True,
+        up_is_bad=True, tooltip=TOOLTIP_HARM,
     ), unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -1682,61 +1722,159 @@ if dff_fall_feat.empty or not feat_cols_exist:
 else:
     n_total = len(dff_fall_feat)
 
-    # ── 圖1：15 特徵出現件數與佔比（水平橫條，>30% 紅色）────
-    st.markdown('<p class="section-title">① 各特徵出現件數與佔比（由高到低）</p>',
+    # ── 圖1：QCC 柏拉圖（遞減排序 + 80/20 累積折線 + 點擊下鑽）─
+    st.markdown('<p class="section-title">① 跌倒特徵柏拉圖（QCC 80/20 法則）</p>',
                 unsafe_allow_html=True)
+    st.caption("💡 點擊任一長條，下方將顯示該特徵在各病房的分佈（RCA 根本原因分析）")
 
     feat_counts = []
     for feat in feat_cols_exist:
-        cnt  = int(dff_fall_feat[feat].sum())
-        pct  = round(cnt / n_total * 100, 1)
+        cnt = int(dff_fall_feat[feat].sum())
+        pct = round(cnt / n_total * 100, 2)
         feat_counts.append({"特徵": feat, "件數": cnt, "佔比": pct})
     df_feat_cnt = (pd.DataFrame(feat_counts)
-                   .sort_values("佔比", ascending=True))   # 水平圖低→高
+                   .sort_values("件數", ascending=False)   # 柏拉圖遞減
+                   .reset_index(drop=True))
 
-    bar_clrs1 = ["#C0392B" if r >= 30 else "#3498DB"
-                 for r in df_feat_cnt["佔比"]]
+    # 累積百分比
+    df_feat_cnt["累積佔比"] = df_feat_cnt["件數"].cumsum() / df_feat_cnt["件數"].sum() * 100
 
-    fig_fe1 = go.Figure(go.Bar(
-        y=df_feat_cnt["特徵"],
-        x=df_feat_cnt["佔比"],
-        orientation="h",
-        marker_color=bar_clrs1,
-        marker_opacity=0.85,
-        text=[f"{r:.2f}%  (n={c})"
-              for r, c in zip(df_feat_cnt["佔比"], df_feat_cnt["件數"])],
+    # 柏拉圖顏色：80%前=深藍（重要），80%後=淺藍
+    cutoff_idx = int((df_feat_cnt["累積佔比"] <= 80).sum())
+    bar_colors = ["#1A5276" if i <= cutoff_idx else "#85C1E9"
+                  for i in range(len(df_feat_cnt))]
+
+    fig_pareto = go.Figure()
+    # 長條圖（主Y軸）
+    fig_pareto.add_trace(go.Bar(
+        x=df_feat_cnt["特徵"],
+        y=df_feat_cnt["件數"],
+        name="件數",
+        marker_color=bar_colors,
+        marker_opacity=0.88,
+        text=df_feat_cnt["件數"],
         textposition="outside",
-        textfont=dict(size=10, color="#1C2833", family="Arial"),
-        customdata=df_feat_cnt["件數"],
+        textfont=dict(size=10, color="#1C2833"),
+        customdata=df_feat_cnt[["佔比","累積佔比"]].values,
         hovertemplate=(
-            "<b>%{y}</b><br>件數：%{customdata}<br>"
-            "佔比：%{x:.2f}%<extra></extra>"
+            "<b>%{x}</b><br>件數：%{y}<br>"
+            "佔比：%{customdata[0]:.2f}%<br>"
+            "累積：%{customdata[1]:.2f}%<extra></extra>"
         ),
+        yaxis="y",
     ))
-    # 30% 參考線
-    fig_fe1.add_vline(
-        x=30, line_dash="dash", line_color="#E74C3C", line_width=1.5,
-        annotation_text="  30%",
-        annotation_position="top right",
-        annotation_font=dict(size=10, color="#E74C3C", family="Arial Bold"),
+    # 累積折線（次Y軸）
+    fig_pareto.add_trace(go.Scatter(
+        x=df_feat_cnt["特徵"],
+        y=df_feat_cnt["累積佔比"],
+        name="累積百分比",
+        mode="lines+markers",
+        line=dict(color="#E74C3C", width=2.5),
+        marker=dict(size=7, color="#E74C3C", symbol="circle"),
+        hovertemplate="<b>%{x}</b><br>累積：%{y:.2f}%<extra></extra>",
+        yaxis="y2",
+    ))
+    # 80% 基準線
+    fig_pareto.add_hline(
+        y=80, line_dash="dash", line_color="#C0392B", line_width=1.8,
+        annotation_text=" 80% 法則基準線",
+        annotation_position="top left",
+        annotation_font=dict(size=11, color="#C0392B", family="Arial Bold"),
+        secondary_y=True if False else False,
+        yref="y2",
     )
-    fig_fe1.update_layout(
-        height=520,
+    fig_pareto.update_layout(
+        height=440,
         plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+        legend=dict(orientation="h", y=1.12, x=1, xanchor="right",
+                    font=dict(size=11, color="#2C3E50")),
         xaxis=dict(
-            title=dict(text="佔比 (%)", font=AXIS_TITLE_FONT),
-            tickfont=AXIS_TICK_FONT,
-            range=[0, max(df_feat_cnt["佔比"].max() * 1.35, 45)],
-            gridcolor=GRID_COLOR, griddash="dot", ticksuffix="%",
+            title=dict(text="跌倒特徵項目", font=AXIS_TITLE_FONT),
+            tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+            tickangle=-30, showgrid=False,
         ),
         yaxis=dict(
-            title=dict(text="特徵項目", font=AXIS_TITLE_FONT),
-            tickfont=dict(size=11, color="#2C3E50", family="Arial"),
-            automargin=True,
+            title=dict(text="件數", font=AXIS_TITLE_FONT),
+            tickfont=AXIS_TICK_FONT,
+            gridcolor=GRID_COLOR, griddash="dot",
+            zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
         ),
-        margin=dict(t=30, b=60, l=130, r=140),
+        yaxis2=dict(
+            title=dict(text="累積百分比 (%)", font=AXIS_TITLE_FONT),
+            tickfont=AXIS_TICK_FONT,
+            overlaying="y", side="right",
+            range=[0, 110], ticksuffix="%",
+            showgrid=False,
+        ),
+        margin=dict(t=50, b=80, l=60, r=70),
+        hovermode="x unified",
+        bargap=0.25,
     )
-    st.plotly_chart(fig_fe1, use_container_width=True)
+
+    # 點擊事件 → session_state 存選中特徵
+    pareto_event = st.plotly_chart(
+        fig_pareto, use_container_width=True,
+        on_select="rerun", key="pareto_select"
+    )
+
+    # ── 下鑽：選中特徵後顯示各單位分佈 ────────────────────────
+    selected_feat = None
+    if pareto_event and pareto_event.get("selection"):
+        pts = pareto_event["selection"].get("points", [])
+        if pts:
+            selected_feat = pts[0].get("x")
+
+    if selected_feat and selected_feat in dff_fall_feat.columns:
+        st.markdown(f"""
+<div style='background:#EBF5FB;border-left:4px solid #2E86C1;
+            padding:10px 14px;border-radius:4px;margin:8px 0 12px 0;
+            font-size:13px;color:#1A5276'>
+  🔍 <b>下鑽分析：「{selected_feat}」各病房 / 單位件數排名 Top 20</b>
+  　｜ RCA 根本原因分析
+</div>""", unsafe_allow_html=True)
+
+        drill_df = dff_fall_feat[dff_fall_feat[selected_feat] == True].copy()
+        if "單位" not in drill_df.columns and "病人/住民-所在科別" in drill_df.columns:
+            drill_df = drill_df.rename(columns={"病人/住民-所在科別": "單位"})
+
+        unit_col = "單位" if "單位" in drill_df.columns else drill_df.columns[0]
+        unit_cnt = (drill_df[unit_col].value_counts()
+                    .head(20).reset_index()
+                    .rename(columns={"index": unit_col, unit_col: "件數",
+                                     "count": "件數"}))
+        # pandas value_counts() 回傳格式相容
+        if "件數" not in unit_cnt.columns:
+            unit_cnt.columns = [unit_col, "件數"]
+        unit_cnt = unit_cnt.sort_values("件數", ascending=True)
+        total_feat = int(dff_fall_feat[selected_feat].sum())
+
+        fig_drill = go.Figure(go.Bar(
+            x=unit_cnt["件數"],
+            y=unit_cnt[unit_col],
+            orientation="h",
+            marker_color="#1A5276",
+            marker_opacity=0.82,
+            text=[f"{v} 件 ({v/total_feat*100:.1f}%)" for v in unit_cnt["件數"]],
+            textposition="outside",
+            textfont=dict(size=10, color="#1C2833", family="Arial"),
+            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        ))
+        fig_drill.update_layout(
+            height=max(280, len(unit_cnt) * 32 + 80),
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, unit_cnt["件數"].max() * 1.35]),
+            yaxis=dict(title=dict(text=unit_col, font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            margin=dict(t=20, b=40, l=90, r=120),
+        )
+        st.plotly_chart(fig_drill, use_container_width=True)
+        st.caption(f"共 {total_feat} 件具備「{selected_feat}」特徵，顯示 Top {len(unit_cnt)} 個單位")
+    elif not selected_feat:
+        st.caption("👆 點擊上方柏拉圖的任一長條，即可下鑽查看該特徵的單位分佈")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -2032,8 +2170,37 @@ else:
             margin=dict(t=20, b=70, l=80, r=100),
         )
         st.plotly_chart(fig_risk1, use_container_width=True)
-    else:
-        st.info("各目標科別件數不足，無法產生熱力矩陣。")
+
+        # ── 動態警示結論（>40% 自動輸出稽核建議）──────────────
+        alerts = []
+        for dept_i, dept in enumerate(valid_depts_risk):
+            for fact_i, fname in enumerate(factor_names):
+                val = hm_rows[dept_i][fact_i]
+                if val > 40:
+                    alerts.append((dept, fname, val))
+
+        if alerts:
+            st.markdown('<p class="section-title">🔔 自動稽核警示（比率 > 40% 的高風險組合）</p>',
+                        unsafe_allow_html=True)
+            # 依數值從高到低排序，最嚴重的排最前面
+            alerts.sort(key=lambda x: x[2], reverse=True)
+            for dept, fname, val in alerts:
+                severity = "🔴 極度警示" if val >= 70 else "🟠 高度警示" if val >= 55 else "🟡 注意"
+                bg = "#FADBD8" if val >= 70 else "#FDEBD0" if val >= 55 else "#FEF9E7"
+                border = "#C0392B" if val >= 70 else "#E67E22" if val >= 55 else "#F39C12"
+                txt_color = "#7B241C" if val >= 70 else "#784212" if val >= 55 else "#7D4700"
+                sub = dff_fall[dff_fall["病人/住民-所在科別"] == dept]
+                n_dept = len(sub)
+                st.markdown(f"""
+<div style='background:{bg};border-left:4px solid {border};
+            padding:10px 16px;border-radius:4px;margin-bottom:6px;
+            font-size:13px;color:{txt_color}'>
+  {severity}｜⚠️ <b>{dept}</b> 的 <b>「{fname}」</b> 比例過高達
+  <b>{val:.1f}%</b>（{dept} 共 {n_dept} 件跌倒事件）
+  ，建議列為本月稽核重點，優先進行護理評估與環境改善。
+</div>""", unsafe_allow_html=True)
+        else:
+            st.info("✅ 目前各科別高風險因子比率均在 40% 以下，無需緊急稽核介入。")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
