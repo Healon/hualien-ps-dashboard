@@ -225,6 +225,171 @@ except Exception as e:
     st.stop()
 
 
+# ════════════════════════════════════════════════════════════
+#  資料清理：讀檔後、任何 groupby 之前套用
+#  1) normalize_category：統一 NaN/空白/undefined/None
+#  2) label_map：代碼 → 顯示名稱
+#  3) 固定排序常數
+# ════════════════════════════════════════════════════════════
+
+def normalize_category(df, col, missing_label="未填/其他"):
+    """把 NaN、空字串、'undefined'、'nan'、None 統一成 missing_label"""
+    if col not in df.columns:
+        return df
+    df = df.copy()
+    df[col] = (df[col].astype(str)
+               .str.strip()
+               .replace({"nan": missing_label,
+                         "none": missing_label,
+                         "None": missing_label,
+                         "undefined": missing_label,
+                         "Undefined": missing_label,
+                         "": missing_label,
+                         "NaN": missing_label}))
+    df[col] = df[col].where(df[col].notna(), missing_label)
+    return df
+
+# ── 顯示名稱映射（代碼 → 中文顯示名稱）─────────────────────
+LABEL_MAP = {
+    # 傷害程度
+    "無傷害":               "無傷害",
+    "輕度":                 "輕度",
+    "中度":                 "中度",
+    "重度":                 "重度",
+    "極重度":               "極重度",
+    "死亡":                 "死亡",
+    "無法判定傷害嚴重程度":   "無法判定",
+    # 科別常見縮寫
+    "PSYCH":  "精神科",
+    "SURG":   "外科",
+    "MED":    "內科",
+    "REHAB":  "復健科",
+    "LTC":    "護理之家",
+    "ICU":    "加護病房",
+    "NICU":   "新生兒加護",
+    "ER":     "急診",
+    "OR":     "手術室",
+    # 單位代碼（W = Ward）
+    "W11":  "W11病房", "W12":  "W12病房", "W13":  "W13病房",
+    "W21":  "W21病房", "W22":  "W22病房", "W23":  "W23病房",
+    "W31":  "W31病房", "W32":  "W32病房", "W33":  "W33病房",
+    "W41":  "W41病房", "W42":  "W42病房",
+}
+
+def display_label(val, fallback=None):
+    """取代碼的顯示名稱，找不到就回傳原值（或 fallback）"""
+    return LABEL_MAP.get(str(val), fallback if fallback is not None else val)
+
+# ── 固定排序常數 ─────────────────────────────────────────────
+INJ_ORDER    = ["無傷害", "輕度", "中度", "重度", "極重度", "死亡", "無法判定"]
+SAC_ORDER    = [1, 2, 3, 4]
+INJ_LABEL_MAP = {
+    "無傷害": "無傷害", "輕度": "輕度", "中度": "中度",
+    "重度": "重度", "極重度": "極重度", "死亡": "死亡",
+    "無法判定傷害嚴重程度": "無法判定",
+}
+
+# ── 套用 normalize_category 到關鍵欄位 ──────────────────────
+_NORM_COLS_ALL = [
+    "事件大類", "事件類別", "單位",
+    "病人/住民-所在科別",
+    "病人/住民-事件發生後對病人健康的影響程度",
+    "病人/住民-事件發生後對病人健康的影響程度(彙總)",
+    "通報者資料-工作年資", "SAC",
+]
+for _col in _NORM_COLS_ALL:
+    df_all = normalize_category(df_all, _col)
+
+_NORM_COLS_FALL = [
+    "病人/住民-所在科別",
+    "病人/住民-事件發生後對病人健康的影響程度",
+    "病人/住民-事件發生後對病人健康的影響程度(彙總)",
+    "跌倒事件發生對象-事件發生時有無陪伴者",
+    "跌倒事件發生對象-事件發生前是否為跌倒高危險群",
+    "跌倒事件發生對象-最近一年是否曾經跌倒",
+    "跌倒事件發生對象-當事人當時意識狀況",
+]
+for _col in _NORM_COLS_FALL:
+    df_fall_base = normalize_category(df_fall_base, _col)
+
+# 傷害程度簡短標籤（顯示用）
+_inj_col = "病人/住民-事件發生後對病人健康的影響程度"
+if _inj_col in df_fall_base.columns:
+    df_fall_base["傷害程度顯示"] = df_fall_base[_inj_col].map(
+        INJ_LABEL_MAP).fillna(df_fall_base[_inj_col])
+if _inj_col in df_all.columns:
+    df_all["傷害程度顯示"] = df_all[_inj_col].map(
+        INJ_LABEL_MAP).fillna(df_all[_inj_col])
+
+# ════════════════════════════════════════════════════════════
+#  session_state 全域篩選器初始化
+# ════════════════════════════════════════════════════════════
+_all_months = sorted(df_all["年月"].dropna().unique())
+
+def _ss_init(key, default):
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+_ss_init("date_range",    (_all_months[0], _all_months[-1]))
+_ss_init("event_type",    "全部")
+_ss_init("dept",          "全部科別")
+_ss_init("unit",          "全院")
+_ss_init("sac_sel",       [1, 2, 3, 4])
+_ss_init("feature_tag",   [])   # 柏拉圖點選的特徵清單
+_ss_init("loc_filter",    "全部地點")
+_ss_init("inj_filter",    "全部傷害程度")
+
+
+def filter_df(base_df=None, use_fall=False):
+    """
+    統一篩選函數 — 所有圖表都呼叫此函數，避免各圖重複過濾不一致。
+    base_df=None → 使用 df_all；use_fall=True → 使用 df_fall_base
+    """
+    src = (df_fall_base if use_fall else
+           (base_df if base_df is not None else df_all))
+    s, e = st.session_state["date_range"]
+    df   = src[(src["年月"] >= s) & (src["年月"] <= e)].copy()
+
+    if not use_fall:
+        u = st.session_state["unit"]
+        if u != "全院" and "單位" in df.columns:
+            df = df[df["單位"] == u]
+        cat = st.session_state["event_type"]
+        if cat != "全部" and "事件大類" in df.columns:
+            df = df[df["事件大類"] == cat]
+        sac = st.session_state["sac_sel"]
+        if sac and "SAC_num" in df.columns:
+            df = df[df["SAC_num"].isin(sac) | df["SAC_num"].isna()]
+
+    dept = st.session_state["dept"]
+    dept_col = "病人/住民-所在科別"
+    if dept != "全部科別" and dept_col in df.columns:
+        df = df[df[dept_col] == dept]
+
+    return df
+
+
+def render_breadcrumb():
+    """麵包屑導航：全院 > 科別 > 單位 > 個案"""
+    parts = ["🏥 全院"]
+    dept = st.session_state.get("dept", "全部科別")
+    unit = st.session_state.get("unit", "全院")
+    feat = st.session_state.get("feature_tag", [])
+    if dept != "全部科別":
+        parts.append(f"🏬 {dept}")
+    if unit != "全院":
+        parts.append(f"🛏 {unit}")
+    if feat:
+        parts.append(f"🔍 {' + '.join(feat[:2])}{'…' if len(feat)>2 else ''}")
+    crumb_html = " <span style='color:#AEB6BF'>›</span> ".join(
+        [f"<span style='color:#2E86C1;font-weight:600'>{p}</span>" for p in parts]
+    )
+    st.markdown(
+        f"<div style='font-size:13px;padding:6px 0 10px 0'>{crumb_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 # ── 側邊欄 ───────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🏥 病人安全儀表板")
@@ -233,45 +398,101 @@ with st.sidebar:
 
     all_months = sorted(df_all["年月"].dropna().unique())
     st.markdown("### 📅 時間區間")
+    _cur_range = st.session_state["date_range"]
+    if _cur_range[0] not in all_months or _cur_range[1] not in all_months:
+        _cur_range = (all_months[0], all_months[-1])
     month_range = st.select_slider("月份", options=all_months,
-        value=(all_months[0], all_months[-1]), label_visibility="collapsed")
+        value=_cur_range, label_visibility="collapsed", key="_slider_month")
+    st.session_state["date_range"] = month_range
     start_m, end_m = month_range
 
     st.markdown("---")
     st.markdown("### 🏬 發生單位")
     unit_opts = ["全院"] + sorted(
-        [u for u in df_all["單位"].dropna().unique() if u not in ["未知",""]])
-    sel_unit = st.selectbox("單位", unit_opts, index=0, label_visibility="collapsed")
+        [u for u in df_all["單位"].dropna().unique()
+         if u not in ["未知","未填/其他",""]])
+    _u = st.session_state["unit"]
+    sel_unit = st.selectbox("單位", unit_opts,
+        index=unit_opts.index(_u) if _u in unit_opts else 0,
+        label_visibility="collapsed", key="_sb_unit")
+    st.session_state["unit"] = sel_unit
 
     st.markdown("---")
     st.markdown("### 📋 事件類別")
     cat_opts = ["全部"] + sorted(df_all["事件大類"].unique())
-    sel_cat  = st.selectbox("類別", cat_opts, index=0, label_visibility="collapsed")
+    _c = st.session_state["event_type"]
+    sel_cat = st.selectbox("類別", cat_opts,
+        index=cat_opts.index(_c) if _c in cat_opts else 0,
+        label_visibility="collapsed", key="_sb_cat")
+    st.session_state["event_type"] = sel_cat
 
     st.markdown("---")
     st.markdown("### ⚠️ SAC 嚴重度")
-    sac_sel = st.multiselect("SAC", options=[1,2,3,4], default=[1,2,3,4],
+    sac_sel = st.multiselect("SAC", options=[1,2,3,4],
+        default=st.session_state["sac_sel"],
         format_func=lambda x: {1:"SAC 1 死亡",2:"SAC 2 重大傷害",
                                 3:"SAC 3 輕中度",4:"SAC 4 無傷害"}[x],
-        label_visibility="collapsed")
+        label_visibility="collapsed", key="_ms_sac")
     if not sac_sel:
         sac_sel = [1,2,3,4]
+    st.session_state["sac_sel"] = sac_sel
 
     st.markdown("---")
     st.markdown("### 🏥 診斷科別篩選")
     dept_all_opts = ["全部科別"] + sorted(
         [d for d in df_all["病人/住民-所在科別"].dropna().unique()
-         if str(d).strip() not in ["", "nan"]])
-    sel_dept = st.selectbox("診斷科別", dept_all_opts, index=0,
-                            label_visibility="collapsed",
-                            help="用於診斷特徵分析區塊")
+         if str(d).strip() not in ["", "nan", "未填/其他"]])
+    _d = st.session_state["dept"]
+    sel_dept = st.selectbox("診斷科別", dept_all_opts,
+        index=dept_all_opts.index(_d) if _d in dept_all_opts else 0,
+        label_visibility="collapsed",
+        help="用於診斷特徵分析與跌倒深度分析",
+        key="_sb_dept")
+    st.session_state["dept"] = sel_dept
+
+    # ── 特徵標籤篩選器 ─────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🔍 特徵標籤篩選")
+    _feat_opts = [
+        "地點_床邊下床","地點_浴廁","地點_走廊行走","地點_椅子輪椅",
+        "機轉_滑倒","機轉_頭暈血壓低","機轉_自行起身未告知","機轉_站不穩腳軟",
+        "發現_護理人員巡視","發現_聲響","病況_精神症狀","病況_約束相關",
+    ]
+    sel_feats = st.multiselect(
+        "選取特徵（留空=全部）", options=_feat_opts,
+        default=st.session_state["feature_tag"],
+        label_visibility="collapsed",
+        help="選擇後，事件明細表只顯示含該特徵的案例",
+        key="_ms_feat")
+    st.session_state["feature_tag"] = sel_feats
+
+    # ── 地點 × 傷害程度 下鑽篩選器 ───────────────────────────
+    st.markdown("---")
+    st.markdown("### 📍 地點 × 傷害程度 下鑽")
+    _loc_opts  = ["全部地點", "床邊下床", "浴廁", "走廊行走", "椅子輪椅"]
+    _inj_disp  = ["全部傷害程度", "無傷害", "輕度", "中度",
+                  "重度", "極重度", "死亡", "無法判定"]
+    _lv = st.session_state["loc_filter"]
+    _iv = st.session_state["inj_filter"]
+    sel_loc = st.selectbox("發生地點", _loc_opts,
+        index=_loc_opts.index(_lv) if _lv in _loc_opts else 0,
+        label_visibility="collapsed", key="_sb_loc")
+    sel_inj_drill = st.selectbox("傷害程度", _inj_disp,
+        index=_inj_disp.index(_iv) if _iv in _inj_disp else 0,
+        label_visibility="collapsed", key="_sb_inj")
+    st.session_state["loc_filter"] = sel_loc
+    st.session_state["inj_filter"] = sel_inj_drill
+    if st.button("🔄 清除地點/傷害篩選", key="_btn_clear_loc"):
+        st.session_state["loc_filter"]  = "全部地點"
+        st.session_state["inj_filter"]  = "全部傷害程度"
+        st.rerun()
 
     st.markdown("---")
     st.markdown("""<div style='font-size:11px;color:#85C1E9;line-height:2.0'>
     📌 資料來源：病人安全通報系統<br>
     📆 資料期間：109–113 年<br>
     🔄 最後更新：115/02/01<br>
-    🔖 版本：v3.2</div>""", unsafe_allow_html=True)
+    🔖 版本：v3.5</div>""", unsafe_allow_html=True)
     st.markdown("---")
     st.markdown("""<div style='font-size:10px;color:#AED6F1;line-height:2.0'>
     <b>SAC 嚴重度定義</b><br>
@@ -281,36 +502,18 @@ with st.sidebar:
     🟢 SAC 4：無傷害</div>""", unsafe_allow_html=True)
 
 
-# ── 過濾 ─────────────────────────────────────────────────────
-mask = (df_all["年月"] >= start_m) & (df_all["年月"] <= end_m)
-dff  = df_all[mask].copy()
-if sel_unit != "全院":
-    dff = dff[dff["單位"] == sel_unit]
-if sel_cat != "全部":
-    dff = dff[dff["事件大類"] == sel_cat]
-dff = dff[dff["SAC_num"].isin(sac_sel) | dff["SAC_num"].isna()]
+# ── 過濾（使用 filter_df() 統一介面，同時保留舊變數名稱相容）────
+dff      = filter_df()
+dff_fall = filter_df(use_fall=True)
+dff_dx   = filter_df()   # 已含 sel_dept 篩選（filter_df 內處理）
 
 bed_key  = "全院" if sel_unit == "全院" else sel_unit
 df_bed_f = df_bed[df_bed["單位"] == bed_key].copy()
 mc = dff.groupby("年月").size().reset_index(name="件數").sort_values("年月")
 mc = mc.merge(df_bed_f[["年月","住院人日數"]], on="年月", how="left")
 mc["發生率"] = (mc["件數"] / mc["住院人日數"] * 1000).round(2).fillna(0)
-
-# ── 年月顯示格式：2025-01 → 2025/01（所有圖表 X 軸統一使用）
 mc["年月顯示"] = mc["年月"].str.replace("-", "/", regex=False)
-dff = dff.copy()
 dff["年月顯示"] = dff["年月"].str.replace("-", "/", regex=False)
-
-# ── 跌倒深度分析資料：依時間區間篩選（與主篩選器連動）
-dff_fall = df_fall_base[
-    (df_fall_base["年月"] >= start_m) & (df_fall_base["年月"] <= end_m)
-].copy()
-
-# ── 診斷特徵分析資料：完全繼承主篩選器（時間+單位+類別+SAC）+ 科別篩選
-dff_dx = dff.copy()   # dff 已套用所有主篩選器
-if sel_dept != "全部科別":
-    dff_dx = dff_dx[dff_dx["病人/住民-所在科別"] == sel_dept]
-
 
 # ════════════════════════════════════════════════════════════
 #  📅 年度比較分析（2024 vs 2025）— 固定全院層級
@@ -384,7 +587,7 @@ harm25_est = round(n25_harm / _harm25_last_m * 12) if _harm25_last_m > 0 else n2
 # ── 頁首 ─────────────────────────────────────────────────────
 st.markdown(f"""
 <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
-            padding:20px 28px;border-radius:10px;margin-bottom:20px'>
+            padding:20px 28px;border-radius:10px;margin-bottom:12px'>
   <h2 style='color:#FFFFFF;margin:0;font-size:21px;font-weight:700'>
     🏥 醫療病人安全事件互動式儀表板
   </h2>
@@ -392,6 +595,8 @@ st.markdown(f"""
     國軍花蓮總醫院｜{start_m} ～ {end_m}｜單位：{sel_unit}｜類別：{sel_cat}
   </p>
 </div>""", unsafe_allow_html=True)
+
+render_breadcrumb()
 
 if dff.empty:
     st.markdown('<div style="background:#FFF3CD;border-left:4px solid #F39C12;padding:10px 14px;border-radius:4px;color:#7D4700;font-size:13px">⚠️ 目前篩選條件下無資料，請調整側邊欄設定。</div>', unsafe_allow_html=True)
@@ -1876,6 +2081,63 @@ else:
     elif not selected_feat:
         st.caption("👆 點擊上方柏拉圖的任一長條，即可下鑽查看該特徵的單位分佈")
 
+    # ── feature_tag 互動事件明細表 ────────────────────────────
+    st.markdown("<hr>", unsafe_allow_html=True)
+    _active_feats = st.session_state.get("feature_tag", [])
+    _feat_label   = "、".join(_active_feats) if _active_feats else "全部特徵"
+    st.markdown(f'<p class="section-title">📋 跌倒事件明細表（篩選條件：{_feat_label}）</p>',
+                unsafe_allow_html=True)
+
+    # 套用 feature_tag 篩選
+    detail_df = dff_fall_feat.copy()
+    if _active_feats:
+        _mask_feat = pd.Series([True] * len(detail_df), index=detail_df.index)
+        for _f in _active_feats:
+            if _f in detail_df.columns:
+                _mask_feat = _mask_feat & (detail_df[_f] == True)
+        detail_df = detail_df[_mask_feat]
+
+    # 選取顯示欄位
+    _disp_cols_map = {
+        "發生日期":                    "事件日期",
+        "病人/住民-所在科別":            "科別",
+        "通報者資料-通報者服務單位":      "單位",
+        "病人/住民-事件發生後對病人健康的影響程度": "傷害程度",
+        "跌倒事件發生對象-發生地點":      "發生地點",
+        "事件說明":                     "事件敘述",
+    }
+    _avail = {k: v for k, v in _disp_cols_map.items() if k in detail_df.columns}
+    if _avail:
+        detail_show = (detail_df[list(_avail.keys())]
+                       .rename(columns=_avail)
+                       .copy())
+        # 去識別：截斷事件敘述至前50字
+        if "事件敘述" in detail_show.columns:
+            detail_show["事件敘述"] = (detail_show["事件敘述"]
+                                       .astype(str)
+                                       .str.slice(0, 50)
+                                       .str.replace(r'\d{3,}', '***', regex=True)  # 遮蔽數字
+                                       + "...")
+        # 傷害程度標準化顯示
+        if "傷害程度" in detail_show.columns:
+            detail_show["傷害程度"] = detail_show["傷害程度"].map(
+                INJ_LABEL_MAP).fillna(detail_show["傷害程度"])
+
+        n_detail = len(detail_show)
+        n_total_fall = len(dff_fall_feat)
+        pct_detail = n_detail / n_total_fall * 100 if n_total_fall > 0 else 0
+        st.caption(f"共 {n_detail} 件（佔全部跌倒事件 {pct_detail:.1f}%）｜資料已去識別處理")
+        st.dataframe(
+            detail_show.reset_index(drop=True),
+            use_container_width=True,
+            height=min(400, 35 * min(n_detail + 1, 12)),
+        )
+        if _active_feats and st.button("🔄 清除特徵篩選", key="_btn_clear_feat"):
+            st.session_state["feature_tag"] = []
+            st.rerun()
+    else:
+        st.info("無法顯示明細表（缺少必要欄位）。")
+
     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ── 圖2：「自行起身未告知」各科別比率（分組橫條）─────────
@@ -1964,8 +2226,8 @@ else:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # ── 圖3：地點 × 傷害程度 交叉熱力圖 ────────────────────
-    st.markdown('<p class="section-title">③ 發生地點 × 傷害程度 交叉熱力圖</p>',
+    # ── 圖3：地點 × 傷害程度 交叉熱力圖（可下鑽）───────────
+    st.markdown('<p class="section-title">③ 發生地點 × 傷害程度 交叉熱力圖（點擊格子下鑽）</p>',
                 unsafe_allow_html=True)
 
     LOC_FEATS = {
@@ -1975,36 +2237,38 @@ else:
         "椅子輪椅": "地點_椅子輪椅",
     }
     INJ_ORDER_HM = ["無傷害","輕度","中度","重度","極重度","無法判定傷害嚴重程度"]
+    INJ_LABEL_HM = {"無法判定傷害嚴重程度": "無法判定"}   # 簡短顯示
     inj_col_f    = "病人/住民-事件發生後對病人健康的影響程度"
 
-    # 建立地點欄位：取第一個命中的地點，未命中標「其他地點」
     def get_location(row):
         for lbl, feat in LOC_FEATS.items():
             if feat in row and row[feat]:
                 return lbl
-        return None   # 排除無地點標記的資料
+        return None
 
     dff_fall_feat2 = dff_fall_feat.copy()
     dff_fall_feat2["地點"] = dff_fall_feat2.apply(get_location, axis=1)
+    # 傷害程度簡短標籤
+    dff_fall_feat2["傷害程度顯示"] = (dff_fall_feat2[inj_col_f]
+                                       .map(INJ_LABEL_MAP)
+                                       .fillna(dff_fall_feat2[inj_col_f]))
     hm_data = dff_fall_feat2[
         dff_fall_feat2["地點"].notna() &
         dff_fall_feat2[inj_col_f].notna()
     ].copy()
 
     if not hm_data.empty:
-        # 只保留有資料的傷害程度
-        valid_inj = [i for i in INJ_ORDER_HM
-                     if i in hm_data[inj_col_f].unique()]
-        loc_order  = list(LOC_FEATS.keys())
+        # 顯示用傷害程度排序
+        INJ_ORDER_DISP = [INJ_LABEL_MAP.get(i, i) for i in INJ_ORDER_HM
+                          if INJ_LABEL_MAP.get(i, i) in hm_data["傷害程度顯示"].unique()]
+        loc_order = list(LOC_FEATS.keys())
 
-        hm_cross = (hm_data.groupby(["地點", inj_col_f])
+        hm_cross = (hm_data.groupby(["地點","傷害程度顯示"])
                     .size().reset_index(name="件數"))
-        hm_piv   = (hm_cross.pivot(index=inj_col_f, columns="地點",
-                                    values="件數")
-                    .reindex(index=valid_inj, columns=loc_order)
+        hm_piv   = (hm_cross.pivot(index="傷害程度顯示", columns="地點", values="件數")
+                    .reindex(index=INJ_ORDER_DISP, columns=loc_order)
                     .fillna(0).astype(int))
 
-        # 格子內文字
         text_matrix = [[str(v) if v > 0 else "" for v in row]
                        for row in hm_piv.values]
 
@@ -2024,34 +2288,162 @@ else:
             hovertemplate=(
                 "<b>地點：%{x}</b><br>"
                 "傷害程度：%{y}<br>"
-                "件數：%{z}<extra></extra>"
+                "件數：%{z} 件<extra></extra>"
             ),
             colorbar=dict(
-                title=dict(text="件數",
-                           font=dict(size=12, color="#1C2833")),
+                title=dict(text="件數", font=dict(size=12, color="#1C2833")),
                 tickfont=dict(size=10, color="#2C3E50"),
                 thickness=14, len=0.7,
             ),
             xgap=3, ygap=3,
         ))
         fig_fe3.update_layout(
-            height=360,
-            paper_bgcolor=PAPER_BG,
-            plot_bgcolor=PAPER_BG,
-            xaxis=dict(
-                title=dict(text="發生地點", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=12, color="#2C3E50", family="Arial"),
-                side="bottom",
-            ),
-            yaxis=dict(
-                title=dict(text="傷害程度", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
-                automargin=True,
-            ),
-            margin=dict(t=20, b=60, l=110, r=80),
+            height=320,
+            paper_bgcolor=PAPER_BG, plot_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="發生地點", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                       side="bottom"),
+            yaxis=dict(title=dict(text="傷害程度", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            margin=dict(t=20, b=60, l=100, r=80),
         )
-        st.plotly_chart(fig_fe3, use_container_width=True)
-        st.caption("💡 格子內數字為該組合的事件件數；顏色越深代表件數越多")
+
+        # 點擊事件（不需第三方套件）
+        hm_event = st.plotly_chart(
+            fig_fe3, use_container_width=True,
+            on_select="rerun", key="hm_loc_inj_select"
+        )
+
+        # 同步點擊結果到 session_state
+        _clicked_loc = None
+        _clicked_inj = None
+        if hm_event and hm_event.get("selection"):
+            pts = hm_event["selection"].get("points", [])
+            if pts:
+                _clicked_loc = pts[0].get("x")
+                _clicked_inj = pts[0].get("y")
+                if _clicked_loc:
+                    st.session_state["loc_filter"] = _clicked_loc
+                if _clicked_inj:
+                    st.session_state["inj_filter"] = _clicked_inj
+
+        # 讀取 session_state 的地點/傷害篩選
+        _cur_loc = st.session_state.get("loc_filter", "全部地點")
+        _cur_inj = st.session_state.get("inj_filter", "全部傷害程度")
+
+        # 目前篩選狀態提示
+        if _cur_loc != "全部地點" or _cur_inj != "全部傷害程度":
+            _tag_parts = []
+            if _cur_loc != "全部地點":
+                _tag_parts.append(f"📍 地點：{_cur_loc}")
+            if _cur_inj != "全部傷害程度":
+                _tag_parts.append(f"🩹 傷害：{_cur_inj}")
+            st.markdown(
+                f"<div style='background:#EBF5FB;border-left:4px solid #2E86C1;"
+                f"padding:8px 14px;border-radius:4px;font-size:13px;color:#1A5276'>"
+                f"🔍 <b>下鑽篩選中：</b> {'　'.join(_tag_parts)} "
+                f"（可在側邊欄「地點 × 傷害程度 下鑽」清除）</div>",
+                unsafe_allow_html=True
+            )
+
+        # ── 下鑽：個案清單 ─────────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<p class="section-title">📋 下鑽個案清單</p>',
+                    unsafe_allow_html=True)
+
+        drill3 = hm_data.copy()
+        _loc_map_back = {v: k for k, v in
+                         {"全部地點":"全部地點","床邊下床":"床邊下床",
+                          "浴廁":"浴廁","走廊行走":"走廊行走","椅子輪椅":"椅子輪椅"}.items()}
+        if _cur_loc != "全部地點":
+            drill3 = drill3[drill3["地點"] == _cur_loc]
+        if _cur_inj != "全部傷害程度":
+            drill3 = drill3[drill3["傷害程度顯示"] == _cur_inj]
+
+        n_drill = len(drill3)
+        n_all   = len(hm_data)
+        pct_all = n_drill / len(dff_fall_feat) * 100 if len(dff_fall_feat) > 0 else 0
+
+        st.caption(
+            f"符合條件：**{n_drill}** 件"
+            f"（佔熱力圖資料 {n_drill/n_all*100:.1f}%，"
+            f"佔全部跌倒事件 {pct_all:.1f}%）"
+        )
+
+        # 個案清單顯示欄位
+        _case_col_map = {
+            "發生日期":                    "事件日期",
+            "病人/住民-所在科別":            "科別",
+            "通報者資料-通報者服務單位":      "單位",
+            "傷害程度顯示":                  "傷害程度",
+            "地點":                          "發生地點",
+            "事件說明":                      "事件敘述",
+        }
+        _case_avail = {k: v for k, v in _case_col_map.items()
+                       if k in drill3.columns}
+        if _case_avail and not drill3.empty:
+            case_show = drill3[list(_case_avail.keys())].rename(columns=_case_avail).copy()
+            if "事件敘述" in case_show.columns:
+                case_show["事件敘述"] = (case_show["事件敘述"].astype(str)
+                                         .str.slice(0, 50)
+                                         .str.replace(r'\d{3,}', '***', regex=True)
+                                         + "...")
+            st.dataframe(
+                case_show.reset_index(drop=True),
+                use_container_width=True,
+                height=min(380, 35 * min(n_drill + 1, 11)),
+            )
+
+        # ── 下鑽：該格在各科別的分布橫條圖 ───────────────────
+        if not drill3.empty:
+            dept_col_f = "病人/住民-所在科別"
+            if dept_col_f in drill3.columns:
+                dept_cnt = (drill3[dept_col_f].value_counts()
+                            .reset_index()
+                            .rename(columns={"index": "科別",
+                                             dept_col_f: "科別",
+                                             "count": "件數"}))
+                if "件數" not in dept_cnt.columns:
+                    dept_cnt.columns = ["科別", "件數"]
+                dept_cnt = dept_cnt.sort_values("件數", ascending=True)
+
+                _loc_txt = _cur_loc if _cur_loc != "全部地點" else "全部地點"
+                _inj_txt = _cur_inj if _cur_inj != "全部傷害程度" else "全部傷害"
+                st.markdown(
+                    f'<p class="section-title">'
+                    f'各科別分布：{_loc_txt} × {_inj_txt}</p>',
+                    unsafe_allow_html=True)
+
+                fig_drill3 = go.Figure(go.Bar(
+                    x=dept_cnt["件數"],
+                    y=dept_cnt["科別"],
+                    orientation="h",
+                    marker_color="#3498DB",
+                    marker_opacity=0.82,
+                    text=[f"{v} 件 ({v/n_drill*100:.1f}%)"
+                          for v in dept_cnt["件數"]],
+                    textposition="outside",
+                    textfont=dict(size=11, color="#1C2833", family="Arial"),
+                    hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+                ))
+                fig_drill3.update_layout(
+                    height=max(200, len(dept_cnt) * 38 + 70),
+                    plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+                    xaxis=dict(
+                        title=dict(text="件數", font=AXIS_TITLE_FONT),
+                        tickfont=AXIS_TICK_FONT,
+                        gridcolor=GRID_COLOR, griddash="dot",
+                        range=[0, dept_cnt["件數"].max() * 1.35],
+                    ),
+                    yaxis=dict(
+                        title=dict(text="科別", font=AXIS_TITLE_FONT),
+                        tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                        automargin=True,
+                    ),
+                    margin=dict(t=20, b=40, l=80, r=120),
+                )
+                st.plotly_chart(fig_drill3, use_container_width=True)
     else:
         st.info("目前資料不足以產生交叉熱力圖。")
 
@@ -2170,37 +2562,8 @@ else:
             margin=dict(t=20, b=70, l=80, r=100),
         )
         st.plotly_chart(fig_risk1, use_container_width=True)
-
-        # ── 動態警示結論（>40% 自動輸出稽核建議）──────────────
-        alerts = []
-        for dept_i, dept in enumerate(valid_depts_risk):
-            for fact_i, fname in enumerate(factor_names):
-                val = hm_rows[dept_i][fact_i]
-                if val > 40:
-                    alerts.append((dept, fname, val))
-
-        if alerts:
-            st.markdown('<p class="section-title">🔔 自動稽核警示（比率 > 40% 的高風險組合）</p>',
-                        unsafe_allow_html=True)
-            # 依數值從高到低排序，最嚴重的排最前面
-            alerts.sort(key=lambda x: x[2], reverse=True)
-            for dept, fname, val in alerts:
-                severity = "🔴 極度警示" if val >= 70 else "🟠 高度警示" if val >= 55 else "🟡 注意"
-                bg = "#FADBD8" if val >= 70 else "#FDEBD0" if val >= 55 else "#FEF9E7"
-                border = "#C0392B" if val >= 70 else "#E67E22" if val >= 55 else "#F39C12"
-                txt_color = "#7B241C" if val >= 70 else "#784212" if val >= 55 else "#7D4700"
-                sub = dff_fall[dff_fall["病人/住民-所在科別"] == dept]
-                n_dept = len(sub)
-                st.markdown(f"""
-<div style='background:{bg};border-left:4px solid {border};
-            padding:10px 16px;border-radius:4px;margin-bottom:6px;
-            font-size:13px;color:{txt_color}'>
-  {severity}｜⚠️ <b>{dept}</b> 的 <b>「{fname}」</b> 比例過高達
-  <b>{val:.1f}%</b>（{dept} 共 {n_dept} 件跌倒事件）
-  ，建議列為本月稽核重點，優先進行護理評估與環境改善。
-</div>""", unsafe_allow_html=True)
-        else:
-            st.info("✅ 目前各科別高風險因子比率均在 40% 以下，無需緊急稽核介入。")
+    else:
+        st.info("各目標科別件數不足，無法產生熱力矩陣。")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
