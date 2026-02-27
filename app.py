@@ -166,8 +166,16 @@ def load_data(path):
     df_fall["發生日期"] = pd.to_datetime(df_fall["發生日期"], errors="coerce")
     df_fall = df_fall[df_fall["發生日期"].notna()].copy()
     df_fall["年月"] = df_fall["發生日期"].dt.to_period("M").astype(str)
-    cols_from_all = ["通報案號","病人/住民-所在科別",
-                     "病人/住民-事件發生後對病人健康的影響程度"]
+    cols_from_all = [
+        "通報案號",
+        "病人/住民-所在科別",
+        "病人/住民-事件發生後對病人健康的影響程度",
+        "病人/住民-事件發生後對病人健康的影響程度(彙總)"
+    ]
+    # 去除空白避免比對失敗
+    for col in cols_from_all[1:]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
     df_fall = df_fall.merge(df[cols_from_all], on="通報案號", how="left")
 
     # ── 事件說明特徵萃取 (extract_fall_features) ─────────────
