@@ -1927,8 +1927,8 @@ if dff_fall_feat.empty or not feat_cols_exist:
 else:
     n_total = len(dff_fall_feat)
 
-    # ── 圖1：QCC 柏拉圖（遞減排序 + 80/20 累積折線 + 點擊下鑽）─
-    st.markdown('<p class="section-title">① 跌倒特徵柏拉圖（QCC 80/20 法則）</p>',
+    # ── 圖1：各特徵出現件數橫條圖（由高到低，>30% 紅色警示）──
+    st.markdown('<p class="section-title">① 各特徵出現件數與佔比（由高到低）</p>',
                 unsafe_allow_html=True)
     st.caption("💡 點擊任一長條，下方將顯示該特徵在各病房的分佈（RCA 根本原因分析）")
 
@@ -1938,87 +1938,56 @@ else:
         pct = round(cnt / n_total * 100, 2)
         feat_counts.append({"特徵": feat, "件數": cnt, "佔比": pct})
     df_feat_cnt = (pd.DataFrame(feat_counts)
-                   .sort_values("件數", ascending=False)   # 柏拉圖遞減
+                   .sort_values("佔比", ascending=True)   # 水平圖：低→高（視覺上高在上）
                    .reset_index(drop=True))
 
-    # 累積百分比
-    df_feat_cnt["累積佔比"] = df_feat_cnt["件數"].cumsum() / df_feat_cnt["件數"].sum() * 100
+    bar_clrs1 = ["#C0392B" if r >= 30 else "#3498DB"
+                 for r in df_feat_cnt["佔比"]]
 
-    # 柏拉圖顏色：80%前=深藍（重要），80%後=淺藍
-    cutoff_idx = int((df_feat_cnt["累積佔比"] <= 80).sum())
-    bar_colors = ["#1A5276" if i <= cutoff_idx else "#85C1E9"
-                  for i in range(len(df_feat_cnt))]
-
-    fig_pareto = go.Figure()
-    # 長條圖（主Y軸）
-    fig_pareto.add_trace(go.Bar(
-        x=df_feat_cnt["特徵"],
-        y=df_feat_cnt["件數"],
-        name="件數",
-        marker_color=bar_colors,
-        marker_opacity=0.88,
-        text=df_feat_cnt["件數"],
+    fig_feat1 = go.Figure(go.Bar(
+        y=df_feat_cnt["特徵"],
+        x=df_feat_cnt["佔比"],
+        orientation="h",
+        marker_color=bar_clrs1,
+        marker_opacity=0.85,
+        text=[f"{r:.2f}%  (n={c})"
+              for r, c in zip(df_feat_cnt["佔比"], df_feat_cnt["件數"])],
         textposition="outside",
-        textfont=dict(size=10, color="#1C2833"),
-        customdata=df_feat_cnt[["佔比","累積佔比"]].values,
+        textfont=dict(size=10, color="#1C2833", family="Arial"),
+        customdata=df_feat_cnt["件數"],
         hovertemplate=(
-            "<b>%{x}</b><br>件數：%{y}<br>"
-            "佔比：%{customdata[0]:.2f}%<br>"
-            "累積：%{customdata[1]:.2f}%<extra></extra>"
+            "<b>%{y}</b><br>件數：%{customdata}<br>"
+            "佔比：%{x:.2f}%<extra></extra>"
         ),
-        yaxis="y",
     ))
-    # 累積折線（次Y軸）
-    fig_pareto.add_trace(go.Scatter(
-        x=df_feat_cnt["特徵"],
-        y=df_feat_cnt["累積佔比"],
-        name="累積百分比",
-        mode="lines+markers",
-        line=dict(color="#E74C3C", width=2.5),
-        marker=dict(size=7, color="#E74C3C", symbol="circle"),
-        hovertemplate="<b>%{x}</b><br>累積：%{y:.2f}%<extra></extra>",
-        yaxis="y2",
-    ))
-    # 80% 基準線
-    fig_pareto.add_hline(
-        y=80, line_dash="dash", line_color="#C0392B", line_width=1.8,
-        annotation_text=" 80% 法則基準線",
-        annotation_position="top left",
-        annotation_font=dict(size=11, color="#C0392B", family="Arial Bold"),
-        secondary_y=True if False else False,
-        yref="y2",
+    # 30% 參考線
+    fig_feat1.add_vline(
+        x=30, line_dash="dash", line_color="#E74C3C", line_width=1.5,
+        annotation_text="  30%",
+        annotation_position="top right",
+        annotation_font=dict(size=10, color="#E74C3C", family="Arial Bold"),
     )
-    fig_pareto.update_layout(
-        height=440,
+    fig_feat1.update_layout(
+        height=520,
         plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-        legend=dict(orientation="h", y=1.12, x=1, xanchor="right",
-                    font=dict(size=11, color="#2C3E50")),
         xaxis=dict(
-            title=dict(text="跌倒特徵項目", font=AXIS_TITLE_FONT),
-            tickfont=dict(size=10, color="#2C3E50", family="Arial"),
-            tickangle=-30, showgrid=False,
-        ),
-        yaxis=dict(
-            title=dict(text="件數", font=AXIS_TITLE_FONT),
+            title=dict(text="佔比 (%)", font=AXIS_TITLE_FONT),
             tickfont=AXIS_TICK_FONT,
-            gridcolor=GRID_COLOR, griddash="dot",
+            range=[0, max(df_feat_cnt["佔比"].max() * 1.35, 45)],
+            gridcolor=GRID_COLOR, griddash="dot", ticksuffix="%",
             zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
         ),
-        yaxis2=dict(
-            title=dict(text="累積百分比 (%)", font=AXIS_TITLE_FONT),
-            tickfont=AXIS_TICK_FONT,
-            overlaying="y", side="right",
-            range=[0, 110], ticksuffix="%",
-            showgrid=False,
+        yaxis=dict(
+            title=dict(text="特徵項目", font=AXIS_TITLE_FONT),
+            tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+            automargin=True,
         ),
-        margin=dict(t=50, b=80, l=60, r=70),
-        hovermode="x unified",
-        bargap=0.25,
+        margin=dict(t=30, b=60, l=130, r=140),
     )
 
-    # 點擊事件 → session_state 存選中特徵
+    # 點擊事件（on_select 原生，不需第三方套件）
     pareto_event = st.plotly_chart(
-        fig_pareto, use_container_width=True,
+        fig_feat1, use_container_width=True,
         on_select="rerun", key="pareto_select"
     )
 
@@ -2027,7 +1996,7 @@ else:
     if pareto_event and pareto_event.get("selection"):
         pts = pareto_event["selection"].get("points", [])
         if pts:
-            selected_feat = pts[0].get("x")
+            selected_feat = pts[0].get("y")   # 水平圖用 y 取類別
 
     if selected_feat and selected_feat in dff_fall_feat.columns:
         st.markdown(f"""
@@ -2047,7 +2016,6 @@ else:
                     .head(20).reset_index()
                     .rename(columns={"index": unit_col, unit_col: "件數",
                                      "count": "件數"}))
-        # pandas value_counts() 回傳格式相容
         if "件數" not in unit_cnt.columns:
             unit_cnt.columns = [unit_col, "件數"]
         unit_cnt = unit_cnt.sort_values("件數", ascending=True)
@@ -2079,7 +2047,7 @@ else:
         st.plotly_chart(fig_drill, use_container_width=True)
         st.caption(f"共 {total_feat} 件具備「{selected_feat}」特徵，顯示 Top {len(unit_cnt)} 個單位")
     elif not selected_feat:
-        st.caption("👆 點擊上方柏拉圖的任一長條，即可下鑽查看該特徵的單位分佈")
+        st.caption("👆 點擊任一橫條，即可下鑽查看該特徵的單位分佈")
 
     # ── feature_tag 互動事件明細表 ────────────────────────────
     st.markdown("<hr>", unsafe_allow_html=True)
