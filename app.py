@@ -325,19 +325,27 @@ if _inj_col in df_all.columns:
 #  session_state 全域篩選器初始化
 # ════════════════════════════════════════════════════════════
 _all_months = sorted(df_all["年月"].dropna().unique())
+_data_start  = _all_months[0]
+_data_end    = _all_months[-1]   # 永遠從資料動態取最新月份
 
 def _ss_init(key, default):
     if key not in st.session_state:
         st.session_state[key] = default
 
-_ss_init("date_range",    (_all_months[0], _all_months[-1]))
+_ss_init("date_range",    (_data_start, _data_end))
 _ss_init("event_type",    "全部")
 _ss_init("dept",          "全部科別")
 _ss_init("unit",          "全院")
 _ss_init("sac_sel",       [1, 2, 3, 4])
-_ss_init("feature_tag",   [])   # 柏拉圖點選的特徵清單
+_ss_init("feature_tag",   [])
 _ss_init("loc_filter",    "全部地點")
 _ss_init("inj_filter",    "全部傷害程度")
+
+# ── 每次執行都強制把結束端點同步到資料最新月份 ────────────────
+# 避免舊 session_state 記住過期的結束月份（資料更新後不會自動反映）
+_cur_s, _cur_e = st.session_state["date_range"]
+if _cur_e not in _all_months or _cur_e < _data_end:
+    st.session_state["date_range"] = (_cur_s if _cur_s in _all_months else _data_start, _data_end)
 
 
 def filter_df(base_df=None, use_fall=False):
@@ -399,10 +407,11 @@ with st.sidebar:
     all_months = sorted(df_all["年月"].dropna().unique())
     st.markdown("### 📅 時間區間")
     _cur_range = st.session_state["date_range"]
-    if _cur_range[0] not in all_months or _cur_range[1] not in all_months:
-        _cur_range = (all_months[0], all_months[-1])
+    # 確保兩端點都在合法月份清單內
+    _s = _cur_range[0] if _cur_range[0] in all_months else all_months[0]
+    _e = _cur_range[1] if _cur_range[1] in all_months else all_months[-1]
     month_range = st.select_slider("月份", options=all_months,
-        value=_cur_range, label_visibility="collapsed", key="_slider_month")
+        value=(_s, _e), label_visibility="collapsed", key="_slider_month")
     st.session_state["date_range"] = month_range
     start_m, end_m = month_range
 
