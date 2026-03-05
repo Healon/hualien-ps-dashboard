@@ -57,6 +57,40 @@ st.markdown("""
         font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 4px;
     }
     hr { border-color: #EAECEE; }
+
+    /* ── Tab 標籤文字高對比（覆蓋 Streamlit 所有版本的 selector）── */
+    .stTabs [data-baseweb="tab"] p,
+    .stTabs [data-baseweb="tab"] span,
+    .stTabs [data-baseweb="tab"] {
+        color: #1C2833 !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        opacity: 1 !important;
+    }
+    /* 選中 tab：深藍色 + 底線加粗 */
+    .stTabs [aria-selected="true"] p,
+    .stTabs [aria-selected="true"] span,
+    .stTabs [aria-selected="true"] {
+        color: #154360 !important;
+        font-weight: 800 !important;
+        opacity: 1 !important;
+    }
+    /* 未選中 tab 保持深灰可讀 */
+    .stTabs [aria-selected="false"] p,
+    .stTabs [aria-selected="false"] span,
+    .stTabs [aria-selected="false"] {
+        color: #2C3E50 !important;
+        font-weight: 600 !important;
+        opacity: 1 !important;
+    }
+    /* Tab 底線顏色加深 */
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: #1A5276 !important;
+        height: 3px !important;
+    }
+    .stTabs [data-baseweb="tab-border"] {
+        background-color: #AEB6BF !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -660,10 +694,10 @@ with _tab1:
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
                 padding:14px 22px;border-radius:10px;margin-bottom:14px'>
       <h2 style='color:#FFFFFF;margin:0;font-size:19px;font-weight:700'>
-        🎯 即時監控戰情室（近一個月：{_last_m}）
+        🎯 即時監控戰情室
       </h2>
       <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
-        Level 1 · Executive Summary · 篩選期間：{start_m} ～ {end_m}
+        Level 1 · Executive Summary · 篩選期間：{start_m} ～ {end_m}（區間末月：{_last_m}）
       </p>
     </div>""", unsafe_allow_html=True)
 
@@ -712,97 +746,117 @@ with _tab1:
         🏗 Level 2 — 系統安全與通報品質檢驗
       </span>
       <span style='font-size:11px;color:#5D6D7E;margin-left:8px'>
-        各單位排行 · 事件類別分布 · SAC 通報金字塔
+        事件類別件數排行 · 事件類別佔比分布
       </span>
     </div>""", unsafe_allow_html=True)
 
-    _l2a, _l2b = st.columns([1.35, 1])
+    # ── 計算事件類別統計（隨時間區間連動）───────────────────
+    _cc = (dff["事件大類"].value_counts()
+           .reset_index()
+           .rename(columns={"事件大類":"類別","count":"件數"}))
+    if "件數" not in _cc.columns:
+        _cc.columns = ["類別","件數"]
+    _cc = _cc.sort_values("件數", ascending=False).reset_index(drop=True)
+
+    # 前三名亮色，其他淡色
+    _TOP3_BRIGHT = ["#E74C3C","#E67E22","#2471A3"]
+    _DIM_COLOR   = "#BDC3C7"
+    _bar_colors  = [_TOP3_BRIGHT[i] if i < 3 else _DIM_COLOR
+                    for i in range(len(_cc))]
+    _donut_colors = [CATEGORY_COLORS.get(c,"#7F8C8D") for c in _cc["類別"]]
+    # 前三名保留原色，其他淡化
+    _donut_colors_highlight = [
+        _donut_colors[i] if i < 3
+        else "#D5D8DC"
+        for i in range(len(_cc))
+    ]
+
+    _l2a, _l2b = st.columns([1.4, 1])
+
     with _l2a:
+        # ── 事件類別長條圖（X=類別，Y=件數，依件數降冪，隨篩選動態排列）
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.markdown('<p class="section-title">🏆 各單位發生件數排行（Top 15）</p>',
+        st.markdown('<p class="section-title">📊 各事件類別發生件數（依件數排列）</p>',
                     unsafe_allow_html=True)
-        st.caption("協助識別高通報單位，判斷是真實風險還是通報文化差異")
-        _ur = dff["單位"].value_counts().head(15).reset_index()
-        _ur.columns = ["單位","件數"] if len(_ur.columns)==2 else _ur.columns
-        if "件數" not in _ur.columns: _ur.columns = ["單位","件數"]
-        _ur = _ur.sort_values("件數", ascending=True)
-        _q75 = _ur["件數"].quantile(0.75)
-        _uc  = ["#E74C3C" if v==_ur["件數"].max() else "#F39C12" if v>=_q75 else "#3498DB"
-                for v in _ur["件數"]]
-        fig_ur = go.Figure(go.Bar(
-            x=_ur["件數"], y=_ur["單位"], orientation="h",
-            marker_color=_uc, marker_opacity=0.85,
-            text=_ur["件數"], textposition="outside",
-            textfont=dict(size=10, color="#1C2833", family="Arial"),
-            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        st.caption("件數排序隨篩選時間區間即時更新；🔴🟠🔵 = 前三高發類別")
+
+        _cc_bar = _cc.sort_values("件數", ascending=False).reset_index(drop=True)
+        fig_cat_bar = go.Figure(go.Bar(
+            x=_cc_bar["類別"],
+            y=_cc_bar["件數"],
+            marker_color=_bar_colors[:len(_cc_bar)],
+            marker_opacity=0.88,
+            text=_cc_bar["件數"],
+            textposition="outside",
+            textfont=dict(size=11, color="#1C2833", family="Arial Bold"),
+            hovertemplate="<b>%{x}</b>：%{y} 件<extra></extra>",
         ))
-        fig_ur.update_layout(
-            height=max(350, len(_ur)*28+80),
+        fig_cat_bar.update_layout(
+            height=320,
             plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
-                       tickfont=AXIS_TICK_FONT,
-                       gridcolor=GRID_COLOR, griddash="dot",
-                       range=[0, _ur["件數"].max()*1.3]),
-            yaxis=dict(title=dict(text="單位", font=AXIS_TITLE_FONT),
-                       tickfont=dict(size=10, color="#2C3E50", family="Arial"),
-                       automargin=True),
-            margin=dict(t=10, b=40, l=80, r=80),
+            xaxis=dict(
+                title=dict(text="事件類別", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                categoryorder="total descending",
+                showgrid=False,
+            ),
+            yaxis=dict(
+                title=dict(text="發生件數", font=AXIS_TITLE_FONT),
+                tickfont=AXIS_TICK_FONT,
+                gridcolor=GRID_COLOR, griddash="dot",
+                zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
+                range=[0, _cc_bar["件數"].max() * 1.25],
+            ),
+            margin=dict(t=20, b=50, l=60, r=30),
+            bargap=0.3,
         )
-        st.plotly_chart(fig_ur, use_container_width=True)
+        st.plotly_chart(fig_cat_bar, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with _l2b:
+        # ── 事件類別甜甜圈（前三名亮色，其他淡色）────────────
         st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.markdown('<p class="section-title">🍩 事件類別分布</p>',
+        st.markdown('<p class="section-title">🍩 事件類別佔比分布</p>',
                     unsafe_allow_html=True)
-        st.caption("檢視各類別佔比，判斷資源配置優先順序")
-        _cc = dff["事件大類"].value_counts().reset_index()
-        _cc.columns = ["類別","件數"] if len(_cc.columns)==2 else _cc.columns
-        if "件數" not in _cc.columns: _cc.columns = ["類別","件數"]
-        _donut_cols = [CATEGORY_COLORS.get(c,"#7F8C8D") for c in _cc["類別"]]
+        st.caption("前三名事件以亮色凸顯，其餘淡色；檢視資源配置優先順序")
+
+        _top3_labels = _cc["類別"].tolist()[:3]
         fig_donut = go.Figure(go.Pie(
-            labels=_cc["類別"], values=_cc["件數"], hole=0.52,
-            marker=dict(colors=_donut_cols),
+            labels=_cc["類別"],
+            values=_cc["件數"],
+            hole=0.52,
+            marker=dict(
+                colors=_donut_colors_highlight,
+                line=dict(color="#FFFFFF", width=2),
+            ),
             textinfo="label+percent",
             textfont=dict(size=10, color="#1C2833"),
+            pull=[0.06 if i < 3 else 0 for i in range(len(_cc))],  # 前三名外凸
             hovertemplate="<b>%{label}</b><br>%{value} 件（%{percent}）<extra></extra>",
+            sort=False,
         ))
         fig_donut.update_layout(
-            height=270, paper_bgcolor=PAPER_BG, showlegend=False,
-            margin=dict(t=10,b=10,l=10,r=10),
-            annotations=[dict(text="事件<br>類別",x=0.5,y=0.5,
-                              font=dict(size=11,color="#2C3E50"),showarrow=False)],
+            height=300, paper_bgcolor=PAPER_BG, showlegend=False,
+            margin=dict(t=10, b=10, l=10, r=10),
+            annotations=[dict(
+                text=f"TOP 3<br><span style='font-size:9px'>{' / '.join(_top3_labels[:3])}</span>",
+                x=0.5, y=0.5,
+                font=dict(size=10, color="#2C3E50"),
+                showarrow=False,
+            )],
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<p class="section-title">🔺 SAC 通報金字塔</p>',
-                    unsafe_allow_html=True)
-        st.caption("底部 SAC 4 件數多 → 通報文化健全；頂層 SAC 1 需獨立追蹤")
-        _sac_pyr = pd.DataFrame([
-            {"SAC":"SAC 4 無傷害",  "件數":int(dff[dff["SAC_num"]==4]["SAC_num"].count()), "顏色":"#1E8449"},
-            {"SAC":"SAC 3 輕中度",  "件數":int(dff[dff["SAC_num"]==3]["SAC_num"].count()), "顏色":"#F39C12"},
-            {"SAC":"SAC 2 重大傷害","件數":int(dff[dff["SAC_num"]==2]["SAC_num"].count()), "顏色":"#E67E22"},
-            {"SAC":"SAC 1 死亡",    "件數":int(dff[dff["SAC_num"]==1]["SAC_num"].count()), "顏色":"#C0392B"},
-        ])
-        fig_pyr = go.Figure(go.Bar(
-            x=_sac_pyr["件數"], y=_sac_pyr["SAC"], orientation="h",
-            marker_color=_sac_pyr["顏色"], marker_opacity=0.87,
-            text=[f"{v} 件" for v in _sac_pyr["件數"]], textposition="outside",
-            textfont=dict(size=10, color="#1C2833"),
-            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
-        ))
-        _mx_sac = max(int(_sac_pyr["件數"].max()), 1)
-        fig_pyr.update_layout(
-            height=200, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
-                       tickfont=AXIS_TICK_FONT, range=[0, _mx_sac*1.35],
-                       gridcolor=GRID_COLOR, griddash="dot"),
-            yaxis=dict(tickfont=dict(size=10, color="#2C3E50", family="Arial"),
-                       automargin=True),
-            margin=dict(t=10, b=40, l=110, r=80),
-        )
-        st.plotly_chart(fig_pyr, use_container_width=True)
+        # 前三名圖例說明
+        for i, lbl in enumerate(_top3_labels[:3]):
+            _cnt = int(_cc[_cc["類別"]==lbl]["件數"].values[0])
+            _pct = _cnt / _cc["件數"].sum() * 100 if _cc["件數"].sum() > 0 else 0
+            _icon = ["🥇","🥈","🥉"][i]
+            st.markdown(
+                f"<div style='font-size:12px;color:#2C3E50;padding:2px 0'>"
+                f"{_icon} <b>{lbl}</b>：{_cnt} 件（{_pct:.1f}%）</div>",
+                unsafe_allow_html=True
+            )
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1052,14 +1106,25 @@ with _tab2:
         val_weight = "900" if (up_is_bad and delta_val > 0) or (not up_is_bad and delta_val < 0) else "800"
         val_color  = "#C0392B" if (up_is_bad and delta_val > 0) else "#1C2833"
 
-        tooltip_html = f"""
-    <div class='kpi-tooltip-icon' title='{tooltip}'
-         style='position:absolute;top:10px;right:12px;
-                width:18px;height:18px;background:#EBF5FB;border-radius:50%;
-                display:flex;align-items:center;justify-content:center;
-                font-size:11px;color:#2E86C1;cursor:help;
-                border:1px solid #AED6F1;font-weight:700'>ℹ</div>
-    """ if tooltip else ""
+        if tooltip:
+            # 清理 tooltip 文字：移除換行、單引號、雙引號，避免破壞 HTML 屬性
+            _tip_clean = (tooltip
+                          .replace("\n", " ")
+                          .replace("'", "")
+                          .replace('"', "")
+                          .replace("=", "＝")
+                          .replace("<", "＜")
+                          .replace(">", "＞"))
+            tooltip_html = (
+                f'<div title="{_tip_clean}" '
+                f'style="position:absolute;top:10px;right:12px;'
+                f'width:18px;height:18px;background:#EBF5FB;border-radius:50%;'
+                f'display:flex;align-items:center;justify-content:center;'
+                f'font-size:11px;color:#2E86C1;cursor:help;'
+                f'border:1px solid #AED6F1;font-weight:700;">ℹ</div>'
+            )
+        else:
+            tooltip_html = ""
 
         return f"""
     <div style='background:#FFFFFF;border-left:5px solid {led};border-radius:10px;
