@@ -370,7 +370,6 @@ _ss_init("date_range",    (_data_start, _data_end))
 _ss_init("event_type",    "全部")
 _ss_init("dept",          "全部科別")
 _ss_init("unit",          "全院")
-_ss_init("sac_sel",       [1, 2, 3, 4])
 _ss_init("feature_tag",   [])
 _ss_init("loc_filter",    "全部地點")
 _ss_init("inj_filter",    "全部傷害程度")
@@ -399,9 +398,7 @@ def filter_df(base_df=None, use_fall=False):
         cat = st.session_state["event_type"]
         if cat != "全部" and "事件大類" in df.columns:
             df = df[df["事件大類"] == cat]
-        sac = st.session_state["sac_sel"]
-        if sac and "SAC_num" in df.columns:
-            df = df[df["SAC_num"].isin(sac) | df["SAC_num"].isna()]
+        # SAC 篩選固定全選（側邊欄已移除 SAC 篩選器）
 
     dept = st.session_state["dept"]
     dept_col = "病人/住民-所在科別"
@@ -470,17 +467,6 @@ with st.sidebar:
     st.session_state["event_type"] = sel_cat
 
     st.markdown("---")
-    st.markdown("### ⚠️ SAC 嚴重度")
-    sac_sel = st.multiselect("SAC", options=[1,2,3,4],
-        default=st.session_state["sac_sel"],
-        format_func=lambda x: {1:"SAC 1 死亡",2:"SAC 2 重大傷害",
-                                3:"SAC 3 輕中度",4:"SAC 4 無傷害"}[x],
-        label_visibility="collapsed", key="_ms_sac")
-    if not sac_sel:
-        sac_sel = [1,2,3,4]
-    st.session_state["sac_sel"] = sac_sel
-
-    st.markdown("---")
     st.markdown("### 🏥 診斷科別篩選")
     dept_all_opts = ["全部科別"] + sorted(
         [d for d in df_all["病人/住民-所在科別"].dropna().unique()
@@ -537,12 +523,6 @@ with st.sidebar:
     🔄 最後更新：115/02/01<br>
     🔖 版本：v3.5</div>""", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("""<div style='font-size:10px;color:#AED6F1;line-height:2.0'>
-    <b>SAC 嚴重度定義</b><br>
-    🔴 SAC 1：死亡<br>
-    🟠 SAC 2：重大傷害<br>
-    🟡 SAC 3：輕中度傷害<br>
-    🟢 SAC 4：無傷害</div>""", unsafe_allow_html=True)
 
 
 # ── 過濾（使用 filter_df() 統一介面，同時保留舊變數名稱相容）────
@@ -761,15 +741,11 @@ with _tab1:
     # 前三名亮色，其他淡色
     _TOP3_BRIGHT = ["#E74C3C","#E67E22","#2471A3"]
     _DIM_COLOR   = "#BDC3C7"
-    _bar_colors  = [_TOP3_BRIGHT[i] if i < 3 else _DIM_COLOR
-                    for i in range(len(_cc))]
-    _donut_colors = [CATEGORY_COLORS.get(c,"#7F8C8D") for c in _cc["類別"]]
-    # 前三名保留原色，其他淡化
-    _donut_colors_highlight = [
-        _donut_colors[i] if i < 3
-        else "#D5D8DC"
-        for i in range(len(_cc))
-    ]
+    # 統一顏色陣列：前三名用 _TOP3_BRIGHT，其餘淡色
+    # 長條圖與甜甜圈都用此陣列，確保顏色完全一致
+    _unified_colors = [_TOP3_BRIGHT[i] if i < 3 else _DIM_COLOR
+                       for i in range(len(_cc))]
+    _bar_colors  = _unified_colors
 
     _l2a, _l2b = st.columns([1.4, 1])
 
@@ -826,7 +802,7 @@ with _tab1:
             values=_cc["件數"],
             hole=0.52,
             marker=dict(
-                colors=_donut_colors_highlight,
+                colors=_unified_colors,
                 line=dict(color="#FFFFFF", width=2),
             ),
             textinfo="label+percent",
