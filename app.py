@@ -22,85 +22,204 @@ st.set_page_config(
 # ── 全域樣式 ─────────────────────────────────────────────────
 st.markdown("""
 <style>
-    * { font-family: Arial, 'Helvetica Neue', sans-serif !important; }
-    .stApp { background-color: #F8F9FA; }
+    /* ── 1. 字體：引入 Inter（Google Fonts），回退至 Public Sans > system-ui ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    html, body, [class*="css"], .stApp, .stMarkdown, .stText,
+    button, input, select, textarea, label, p, span, div {
+        font-family: 'Inter', 'Public Sans', system-ui, -apple-system,
+                     'Helvetica Neue', Arial, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* ── 主背景 ─────────────────────────────── */
+    .stApp { background-color: #F4F6F8; }
+
+    /* ── 2. 語義化色彩系統定義（CSS 變數）─────── */
+    :root {
+        --color-title:    #1C2833;   /* 主標題：最高對比深黑 */
+        --color-subtitle: #5D6D7E;   /* 副標題/標籤：深藍灰 */
+        --color-body:     #2C3E50;   /* 內文 */
+        --color-muted:    #85929E;   /* 次要文字 */
+        --color-medical:  #2E86C1;   /* 醫務藍 */
+        --color-danger:   #C0392B;   /* 警示紅 */
+        --color-warning:  #F39C12;   /* 警告橙 */
+        --color-safe:     #1E8449;   /* 安全綠 */
+        --color-border:   #E5E8EC;
+        --color-bg-card:  #FFFFFF;
+        --gutter: 16px;
+    }
+
+    /* ── Sidebar ─────────────────────────────── */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a2e3d 0%, #2C3E50 100%);
+        background: linear-gradient(180deg, #152535 0%, #1C2E40 60%, #243447 100%);
     }
     [data-testid="stSidebar"] * { color: #D6EAF8 !important; }
-    [data-testid="stSidebar"] label { color: #AED6F1 !important; font-weight: 600; }
-
-    .kpi-card {
-        background: #FFFFFF; border-radius: 10px; padding: 18px 22px;
-        box-shadow: 0 1px 8px rgba(0,0,0,0.09);
-        border-left: 5px solid #3498DB; margin-bottom: 10px; min-height: 108px;
+    [data-testid="stSidebar"] label {
+        color: #AED6F1 !important;
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.3px;
     }
-    .kpi-card.danger  { border-left-color: #E74C3C; }
-    .kpi-card.warning { border-left-color: #F39C12; }
-    .kpi-card.death   { border-left-color: #C0392B; }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #EBF5FB !important;
+        font-weight: 700 !important;
+    }
+
+    /* ── 3. KPI 卡片：強化陰影、側邊提示條、gutter ─── */
+    .kpi-card {
+        background: var(--color-bg-card);
+        border-radius: 12px;
+        padding: 18px 22px 16px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
+        border-left: 5px solid var(--color-medical);
+        margin-bottom: var(--gutter);
+        min-height: 110px;
+        transition: box-shadow 0.2s ease;
+    }
+    .kpi-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .kpi-card.danger  { border-left-color: var(--color-danger); }
+    .kpi-card.warning { border-left-color: var(--color-warning); }
+    .kpi-card.death   { border-left-color: #7B241C; }
+    .kpi-card.safe    { border-left-color: var(--color-safe); }
 
     .kpi-label {
-        font-size: 11px; color: #2C3E50; font-weight: 700;
-        letter-spacing: 0.6px; margin-bottom: 5px; text-transform: uppercase;
+        font-size: 11px;
+        color: var(--color-subtitle);
+        font-weight: 700;
+        letter-spacing: 0.7px;
+        margin-bottom: 6px;
+        text-transform: uppercase;
     }
-    .kpi-value { font-size: 36px; font-weight: 900; color: #1C2833; line-height: 1.1; }
+    .kpi-value {
+        font-size: 36px;
+        font-weight: 900;
+        color: var(--color-title);
+        line-height: 1.1;
+        letter-spacing: -0.5px;
+    }
     .kpi-card.danger  .kpi-value { color: #922B21; }
     .kpi-card.warning .kpi-value { color: #7D6608; }
     .kpi-card.death   .kpi-value { color: #7B241C; }
-    .kpi-sub { font-size: 11px; color: #4D5656; margin-top: 4px; font-weight: 500; }
+    .kpi-sub {
+        font-size: 11px;
+        color: var(--color-muted);
+        margin-top: 5px;
+        font-weight: 500;
+        line-height: 1.4;
+    }
 
+    /* ── 圖表容器：gutter 16px、精緻陰影、圓角 ─── */
     .chart-container {
-        background: #FFFFFF; border-radius: 10px; padding: 20px;
-        box-shadow: 0 1px 8px rgba(0,0,0,0.07); margin-bottom: 16px;
+        background: var(--color-bg-card);
+        border-radius: 12px;
+        padding: 20px 22px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: var(--gutter);
+        border: 1px solid var(--color-border);
     }
-    .section-title {
-        font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 4px;
-    }
-    hr { border-color: #EAECEE; }
 
-    /* ── Tab 標籤文字高對比（覆蓋 Streamlit 所有版本的 selector）── */
+    /* ── 區塊標題統一 ────────────────────────── */
+    .section-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--color-title);
+        margin-bottom: 6px;
+        letter-spacing: -0.1px;
+    }
+    .section-subtitle {
+        font-size: 12px;
+        color: var(--color-subtitle);
+        margin-bottom: 10px;
+        font-weight: 500;
+    }
+
+    /* ── 4. 圖表精緻化：長條圖圓角（SVG path 處理）─ */
+    /* Plotly bar chart SVG 圓角（前端 CSS 不直接作用於 SVG path，
+       實際圓角由 Python 側 marker.line + bargap 控制，此處備用） */
+    .js-plotly-plot .plotly .bars path {
+        rx: 4px;
+    }
+
+    /* ── 水平分隔線 ──────────────────────────── */
+    hr { border-color: var(--color-border); margin: var(--gutter) 0; }
+
+    /* ── Streamlit 原生元件字色補正 ─────────────── */
+    .stSelectbox label,
+    .stMultiSelect label,
+    .stSlider label,
+    .stCaption,
+    .stCaption p {
+        color: var(--color-subtitle) !important;
+        font-size: 12px !important;
+    }
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        color: var(--color-title) !important;
+        font-weight: 700 !important;
+    }
+    .stMarkdown p {
+        color: var(--color-body);
+        line-height: 1.6;
+    }
+
+    /* ── Tab 標籤高對比（覆蓋所有 Streamlit 版本）── */
     .stTabs [data-baseweb="tab"] p,
     .stTabs [data-baseweb="tab"] span,
     .stTabs [data-baseweb="tab"] {
-        color: #1C2833 !important;
+        color: var(--color-body) !important;
         font-weight: 700 !important;
         font-size: 14px !important;
         opacity: 1 !important;
+        font-family: 'Inter', sans-serif !important;
     }
-    /* 選中 tab：深藍色 + 底線加粗 */
     .stTabs [aria-selected="true"] p,
     .stTabs [aria-selected="true"] span,
     .stTabs [aria-selected="true"] {
-        color: #154360 !important;
+        color: var(--color-medical) !important;
         font-weight: 800 !important;
         opacity: 1 !important;
     }
-    /* 未選中 tab 保持深灰可讀 */
     .stTabs [aria-selected="false"] p,
     .stTabs [aria-selected="false"] span,
     .stTabs [aria-selected="false"] {
-        color: #2C3E50 !important;
+        color: var(--color-subtitle) !important;
         font-weight: 600 !important;
         opacity: 1 !important;
     }
-    /* Tab 底線顏色加深 */
     .stTabs [data-baseweb="tab-highlight"] {
-        background-color: #1A5276 !important;
+        background-color: var(--color-medical) !important;
         height: 3px !important;
+        border-radius: 2px 2px 0 0 !important;
     }
     .stTabs [data-baseweb="tab-border"] {
-        background-color: #AEB6BF !important;
+        background-color: var(--color-border) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── 軸標題統一樣式（深色，確保可讀）────────────────────────
-# 所有圖表軸標題使用此字典，確保顏色一致
-AXIS_TITLE_FONT  = dict(size=13, color="#1C2833", family="Arial")   # 深黑，最高對比
-AXIS_TICK_FONT   = dict(size=10, color="#2C3E50", family="Arial")   # 深藍灰
-TITLE_FONT       = dict(size=16, color="#2C3E50", family="Arial")
-GRID_COLOR       = "#EAECEE"
+# ── 語義化色彩系統（Python 側，與 CSS 變數對應）─────────────
+COLOR_TITLE    = "#1C2833"   # 主標題：最高對比深黑
+COLOR_SUBTITLE = "#5D6D7E"   # 副標題/標籤
+COLOR_BODY     = "#2C3E50"   # 內文
+COLOR_MUTED    = "#85929E"   # 次要文字
+COLOR_MEDICAL  = "#2E86C1"   # 醫務藍
+COLOR_DANGER   = "#C0392B"   # 警示紅
+COLOR_WARNING  = "#F39C12"   # 警告橙
+COLOR_SAFE     = "#1E8449"   # 安全綠
+
+# ── 圖表字體與軸標題樣式（全面升級到 Inter）────────────────
+FONT_FAMILY      = "Inter, 'Public Sans', system-ui, Arial, sans-serif"
+AXIS_TITLE_FONT  = dict(size=13, color=COLOR_TITLE,    family=FONT_FAMILY)
+AXIS_TICK_FONT   = dict(size=10, color=COLOR_BODY,     family=FONT_FAMILY)
+TITLE_FONT       = dict(size=16, color=COLOR_TITLE,    family=FONT_FAMILY)
+SUBTITLE_FONT    = dict(size=12, color=COLOR_SUBTITLE, family=FONT_FAMILY)
+GRID_COLOR       = "#E8EAED"
 ZERO_LINE_COLOR  = "#BDC3C7"
 PLOT_BG          = "#FFFFFF"
 PAPER_BG         = "#FFFFFF"
@@ -626,7 +745,11 @@ if dff.empty:
     st.stop()
 
 
-_tab1, _tab2 = st.tabs(["🎯 即時監控戰情室", "📈 長期趨勢與深度比較"])
+_tab1, _tab2, _tab3 = st.tabs([
+    "🎯 即時監控戰情室",
+    "📈 長期趨勢與深度比較",
+    "💊 藥物安全分析",
+])
 
 with _tab1:
 
@@ -760,11 +883,15 @@ with _tab1:
         fig_cat_bar = go.Figure(go.Bar(
             x=_cc_bar["類別"],
             y=_cc_bar["件數"],
-            marker_color=_bar_colors[:len(_cc_bar)],
-            marker_opacity=0.88,
+            marker=dict(
+                color=_bar_colors[:len(_cc_bar)],
+                opacity=0.90,
+                cornerradius=6,        # 長條圖圓角
+                line=dict(width=0),    # 無邊框更簡潔
+            ),
             text=_cc_bar["件數"],
             textposition="outside",
-            textfont=dict(size=11, color="#1C2833", family="Arial Bold"),
+            textfont=dict(size=11, color=COLOR_TITLE, family=FONT_FAMILY),
             hovertemplate="<b>%{x}</b>：%{y} 件<extra></extra>",
         ))
         fig_cat_bar.update_layout(
@@ -772,7 +899,7 @@ with _tab1:
             plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
             xaxis=dict(
                 title=dict(text="事件類別", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                tickfont=dict(size=11, color=COLOR_BODY, family=FONT_FAMILY),
                 categoryorder="total descending",
                 showgrid=False,
             ),
@@ -781,10 +908,10 @@ with _tab1:
                 tickfont=AXIS_TICK_FONT,
                 gridcolor=GRID_COLOR, griddash="dot",
                 zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
-                range=[0, _cc_bar["件數"].max() * 1.25],
+                range=[0, _cc_bar["件數"].max() * 1.28],
             ),
             margin=dict(t=20, b=50, l=60, r=30),
-            bargap=0.3,
+            bargap=0.32,
         )
         st.plotly_chart(fig_cat_bar, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -797,17 +924,18 @@ with _tab1:
         st.caption("前三名事件以亮色凸顯，其餘淡色；檢視資源配置優先順序")
 
         _top3_labels = _cc["類別"].tolist()[:3]
+        _total_events = int(_cc["件數"].sum())
         fig_donut = go.Figure(go.Pie(
             labels=_cc["類別"],
             values=_cc["件數"],
-            hole=0.52,
+            hole=0.54,
             marker=dict(
                 colors=_unified_colors,
-                line=dict(color="#FFFFFF", width=2),
+                line=dict(color="#FFFFFF", width=2.5),
             ),
             textinfo="label+percent",
-            textfont=dict(size=10, color="#1C2833"),
-            pull=[0.06 if i < 3 else 0 for i in range(len(_cc))],  # 前三名外凸
+            textfont=dict(size=10, color="#1C2833", family=FONT_FAMILY),
+            pull=[0.06 if i < 3 else 0 for i in range(len(_cc))],
             hovertemplate="<b>%{label}</b><br>%{value} 件（%{percent}）<extra></extra>",
             sort=False,
         ))
@@ -815,9 +943,9 @@ with _tab1:
             height=300, paper_bgcolor=PAPER_BG, showlegend=False,
             margin=dict(t=10, b=10, l=10, r=10),
             annotations=[dict(
-                text=f"TOP 3<br><span style='font-size:9px'>{' / '.join(_top3_labels[:3])}</span>",
+                text=f"<b>{_total_events}</b><br><span style='font-size:9px'>件</span>",
                 x=0.5, y=0.5,
-                font=dict(size=10, color="#2C3E50"),
+                font=dict(size=18, color=COLOR_TITLE, family=FONT_FAMILY),
                 showarrow=False,
             )],
         )
@@ -2921,6 +3049,387 @@ with _tab2:
             st.plotly_chart(fig_risk1, use_container_width=True)
         else:
             st.info("各目標科別件數不足，無法產生熱力矩陣。")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+
+# ════════════════════════════════════════════════════════════
+#  TAB 3：藥物安全分析
+# ════════════════════════════════════════════════════════════
+with _tab3:
+
+    # ── 載入藥物工作表 ─────────────────────────────────────────
+    @st.cache_data
+    def load_drug_data():
+        df_d = pd.read_excel(DATA_PATH, sheet_name="109-113藥物")
+        df_d["年月"] = (pd.to_datetime(df_d["發生日期"], errors="coerce")
+                        .dt.to_period("M").astype(str))
+        df_d["_stage_order"] = df_d.get("事件發生階段-醫囑開立與輸入-醫囑開立與輸入", 0)
+        df_d["_stage_disp"]  = df_d.get("事件發生階段-藥局調劑-藥局調劑", 0)
+        df_d["_stage_trans"] = df_d.get("事件發生階段-傳送過程-傳送過程", 0)
+        df_d["_stage_admin"] = df_d.get("事件發生階段-給藥階段-給藥階段", 0)
+        _ha_kw = (r"insulin|Insulin|胰島素|Novomix|NovoRapid|Lantus|Humulin|"
+                  r"Warfarin|warfarin|Heparin|heparin|enoxaparin|"
+                  r"KCl|Kcl|potassium|MgSO4|"
+                  r"Midazolam|midazolam|Lorazepam|Morphine|morphine")
+        df_d["高警訊"] = (df_d["藥物名稱-應給藥名"].fillna("")
+                          .str.contains(_ha_kw, case=False, regex=True))
+        return df_d
+
+    df_drug = load_drug_data()
+
+    _ds, _de = st.session_state["date_range"]
+    df_drug_f = df_drug[(df_drug["年月"] >= _ds) & (df_drug["年月"] <= _de)].copy()
+    _drug_n     = len(df_drug_f)
+    _drug_n_all = len(df_drug)
+
+    # ── Page Header ──────────────────────────────────────────
+    st.markdown(f"""
+<div style='background:linear-gradient(135deg,#2C1654,#6C3483);
+            padding:14px 22px;border-radius:10px;margin-bottom:14px'>
+  <h2 style='color:#FFFFFF;margin:0;font-size:19px;font-weight:700'>
+    💊 藥物安全分析
+  </h2>
+  <p style='color:#D7BDE2;margin:4px 0 0;font-size:11px'>
+    藥物事件深度分析 · 錯誤環節追蹤 · 高警訊藥物監測
+    ｜篩選期間：{_ds} ～ {_de}（共 {_drug_n} 件）
+  </p>
+</div>""", unsafe_allow_html=True)
+
+    # ── KPI 區塊（紫色系）───────────────────────────────────
+    _ha_n     = int(df_drug_f["高警訊"].sum())
+    _admin_n  = int(df_drug_f["_stage_admin"].sum())
+    _admin_pct = round(_admin_n / _drug_n * 100, 1) if _drug_n > 0 else 0
+    _disp_n   = int(df_drug_f["_stage_disp"].sum())
+    _disp_pct  = round(_disp_n / _drug_n * 100, 1) if _drug_n > 0 else 0
+
+    _kc1, _kc2, _kc3, _kc4 = st.columns(4)
+    _kpi_s = ("background:#FFFFFF;border-radius:12px;padding:16px 18px;"
+              "box-shadow:0 2px 10px rgba(0,0,0,0.09);"
+              "border-left:5px solid {color};min-height:100px")
+    for col, title, value, sub, color in [
+        (_kc1, "💊 藥物事件總件數",  f"{_drug_n} 件",
+         f"篩選期 {_drug_n} ／ 全期 {_drug_n_all} 件", "#7D3C98"),
+        (_kc2, "🚨 給藥階段佔比",   f"{_admin_pct:.1f}%",
+         f"給藥階段 {_admin_n} 件（最前線風險）", "#C0392B"),
+        (_kc3, "⚗️ 調劑階段佔比",  f"{_disp_pct:.1f}%",
+         f"藥局調劑 {_disp_n} 件（攔截關鍵點）", "#1A5276"),
+        (_kc4, "⚠️ 高警訊藥物件數", f"{_ha_n} 件",
+         "胰島素·抗凝血劑·電解質·鎮靜劑", "#B7950B"),
+    ]:
+        col.markdown(
+            f"<div style='{_kpi_s.format(color=color)}'>"
+            f"<div style='font-size:11px;color:#5D6D7E;font-weight:700;"
+            f"letter-spacing:0.5px;margin-bottom:6px'>{title}</div>"
+            f"<div style='font-size:30px;font-weight:900;color:#1C2833;"
+            f"line-height:1.1'>{value}</div>"
+            f"<div style='font-size:11px;color:#85929E;margin-top:5px'>{sub}</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 漏斗圖 + 劑型分布 ───────────────────────────────────
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown("""<div style='background:#F4ECF7;border-radius:8px;
+        padding:10px 16px;margin-bottom:12px'>
+      <span style='font-size:14px;font-weight:700;color:#4A235A'>
+        🔬 給藥流程錯誤分布
+      </span>
+      <span style='font-size:11px;color:#7D3C98;margin-left:8px'>
+        各環節攔截點分析 · 藥物劑型分布
+      </span>
+    </div>""", unsafe_allow_html=True)
+
+    _fl, _fr = st.columns([1.3, 1])
+
+    with _fl:
+        _funnel_stages = ["醫囑開立", "藥局調劑", "傳送過程", "給藥階段"]
+        _funnel_cols   = ["_stage_order","_stage_disp","_stage_trans","_stage_admin"]
+        _funnel_vals   = [int(df_drug_f[c].sum()) for c in _funnel_cols]
+        _funnel_colors = ["#1A5276","#2471A3","#5DADE2","#C0392B"]
+
+        st.markdown('<p class="section-title">🔽 給藥流程錯誤攔截漏斗</p>',
+                    unsafe_allow_html=True)
+        st.caption("各環節出現的錯誤件數；給藥階段偏高代表前端屏障需強化")
+
+        fig_funnel = go.Figure(go.Funnel(
+            y=_funnel_stages, x=_funnel_vals,
+            textinfo="value+percent initial",
+            textfont=dict(size=13, color="white", family=FONT_FAMILY),
+            marker=dict(color=_funnel_colors,
+                        line=dict(width=1, color="white")),
+            connector=dict(line=dict(color="#D7BDE2", width=1.5, dash="dot")),
+            hovertemplate="<b>%{y}</b><br>件數：%{x}<extra></extra>",
+        ))
+        fig_funnel.update_layout(
+            height=300, paper_bgcolor=PAPER_BG,
+            margin=dict(t=10, b=20, l=10, r=10),
+            font=dict(family=FONT_FAMILY, color=COLOR_TITLE),
+        )
+        st.plotly_chart(fig_funnel, use_container_width=True)
+
+    with _fr:
+        _dosage_map = {
+            "口服藥":   "應給藥物劑型-口服藥",
+            "注射劑":   "應給藥物劑型-注射劑",
+            "吸入劑":   "應給藥物劑型-吸入劑",
+            "外用藥":   "應給藥物劑型-外用藥",
+            "化療針劑": "應給藥物劑型-化學治療針劑",
+        }
+        _dosage_df = pd.DataFrame([
+            {"劑型": lbl,
+             "件數": int(df_drug_f[col].sum()) if col in df_drug_f.columns else 0}
+            for lbl, col in _dosage_map.items()
+        ]).query("件數 > 0").sort_values("件數", ascending=True)
+
+        st.markdown('<p class="section-title">💊 應給藥物劑型分布</p>',
+                    unsafe_allow_html=True)
+        st.caption("注射劑與口服藥錯誤風險最高，需重點監控雙重核對")
+
+        _max_dose = _dosage_df["件數"].max() if not _dosage_df.empty else 1
+        _q60_dose = _dosage_df["件數"].quantile(0.6) if not _dosage_df.empty else 0
+        _dose_colors = [
+            "#7D3C98" if v == _max_dose else
+            "#A569BD" if v >= _q60_dose else "#D7BDE2"
+            for v in _dosage_df["件數"]
+        ]
+        fig_dosage = go.Figure(go.Bar(
+            x=_dosage_df["件數"], y=_dosage_df["劑型"],
+            orientation="h",
+            marker=dict(color=_dose_colors, cornerradius=5, line=dict(width=0)),
+            text=[f"{v} 件" for v in _dosage_df["件數"]],
+            textposition="outside",
+            textfont=dict(size=11, color=COLOR_TITLE, family=FONT_FAMILY),
+            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        ))
+        fig_dosage.update_layout(
+            height=260, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, _max_dose * 1.35]),
+            yaxis=dict(tickfont=dict(size=11, color=COLOR_BODY, family=FONT_FAMILY),
+                       automargin=True),
+            margin=dict(t=10, b=40, l=80, r=80),
+        )
+        st.plotly_chart(fig_dosage, use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── 錯誤子類型橫條圖 ─────────────────────────────────────
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">🔎 各環節錯誤子類型明細（Top 20）</p>',
+                unsafe_allow_html=True)
+    st.caption("識別最需系統性介入的具體錯誤類型；顏色代表所屬流程環節")
+
+    _stage_pfx = {
+        "給藥階段": "事件發生階段-給藥階段-是-",
+        "藥局調劑": "事件發生階段-藥局調劑-是-",
+        "醫囑開立": "事件發生階段-醫囑開立與輸入-是-",
+        "傳送過程": "事件發生階段-傳送過程-是-",
+    }
+    _stage_pal = {"給藥階段":"#C0392B","藥局調劑":"#2471A3",
+                  "醫囑開立":"#1A5276","傳送過程":"#7D3C98"}
+
+    _sub_rows = []
+    for stage, pfx in _stage_pfx.items():
+        for col in [c for c in df_drug_f.columns
+                    if c.startswith(pfx) and "文字" not in c]:
+            n = int(df_drug_f[col].sum())
+            if n > 0:
+                _sub_rows.append({
+                    "環節": stage,
+                    "錯誤類型": col.replace(pfx, ""),
+                    "件數": n,
+                })
+
+    if _sub_rows:
+        _st_df = (pd.DataFrame(_sub_rows)
+                  .sort_values("件數", ascending=False).head(20)
+                  .sort_values("件數", ascending=True))
+        _st_colors = [_stage_pal.get(s, "#7F8C8D") for s in _st_df["環節"]]
+
+        _lg = "　".join(
+            f"<span style='color:{c};font-weight:700'>■ {s}</span>"
+            for s, c in _stage_pal.items()
+        )
+        st.markdown(f"<div style='font-size:11px;margin-bottom:8px'>{_lg}</div>",
+                    unsafe_allow_html=True)
+
+        fig_sub = go.Figure(go.Bar(
+            x=_st_df["件數"],
+            y=_st_df.apply(lambda r: f"[{r['環節']}] {r['錯誤類型']}", axis=1),
+            orientation="h",
+            marker=dict(color=_st_colors, cornerradius=5,
+                        opacity=0.87, line=dict(width=0)),
+            text=[f"{v} 件" for v in _st_df["件數"]],
+            textposition="outside",
+            textfont=dict(size=10, color=COLOR_TITLE, family=FONT_FAMILY),
+            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        ))
+        fig_sub.update_layout(
+            height=max(400, len(_st_df) * 28 + 80),
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, _st_df["件數"].max() * 1.3]),
+            yaxis=dict(tickfont=dict(size=10, color=COLOR_BODY, family=FONT_FAMILY),
+                       automargin=True),
+            margin=dict(t=10, b=40, l=210, r=90),
+        )
+        st.plotly_chart(fig_sub, use_container_width=True)
+    else:
+        st.info("目前篩選期間無錯誤子類型資料。")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── 可能原因分析 ─────────────────────────────────────────
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">🧩 可能原因分析（Top 20）</p>',
+                unsafe_allow_html=True)
+    st.caption("多選欄位加總；同一事件可歸因多項原因")
+
+    _cause_def = [
+        ("人員因素", "#7D3C98",
+         [c for c in df_drug_f.columns
+          if "可能原因-" in c and "人員" in c and "文字" not in c]),
+        ("工作流程", "#C0392B",
+         [c for c in df_drug_f.columns
+          if "可能原因-" in c and "工作狀態" in c and "文字" not in c]),
+        ("溝通因素", "#1A5276",
+         [c for c in df_drug_f.columns
+          if "可能原因-" in c and "溝通" in c and "文字" not in c]),
+        ("器材設備", "#B7950B",
+         [c for c in df_drug_f.columns
+          if "可能原因-" in c and "器材" in c and "文字" not in c]),
+        ("藥物本身", "#1E8449",
+         [c for c in df_drug_f.columns
+          if "可能原因-" in c
+          and any(k in c for k in ["藥名相似","外型","標示","保存","列印"])
+          and "文字" not in c]),
+        ("病人因素", "#5D6D7E",
+         [c for c in df_drug_f.columns
+          if "可能原因-" in c and "病人生理" in c and "文字" not in c]),
+    ]
+
+    _ca_rows = []
+    for grp, color, cols in _cause_def:
+        for col in cols:
+            n = int(df_drug_f[col].sum()) if col in df_drug_f.columns else 0
+            if n > 0:
+                lbl = col.replace("可能原因-","")
+                _ca_rows.append({"原因大類": grp, "原因": lbl,
+                                 "件數": n, "顏色": color})
+
+    if _ca_rows:
+        _ca_df = (pd.DataFrame(_ca_rows)
+                  .sort_values("件數", ascending=False).head(20)
+                  .sort_values("件數", ascending=True))
+
+        fig_cause = go.Figure(go.Bar(
+            x=_ca_df["件數"],
+            y=_ca_df.apply(lambda r: f"[{r['原因大類']}] {r['原因']}", axis=1),
+            orientation="h",
+            marker=dict(color=_ca_df["顏色"].tolist(),
+                        cornerradius=5, opacity=0.87, line=dict(width=0)),
+            text=[f"{v} 件" for v in _ca_df["件數"]],
+            textposition="outside",
+            textfont=dict(size=10, color=COLOR_TITLE, family=FONT_FAMILY),
+            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        ))
+        fig_cause.update_layout(
+            height=max(360, len(_ca_df) * 28 + 80),
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="歸因件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, _ca_df["件數"].max() * 1.3]),
+            yaxis=dict(tickfont=dict(size=10, color=COLOR_BODY, family=FONT_FAMILY),
+                       automargin=True),
+            margin=dict(t=10, b=40, l=220, r=90),
+        )
+        st.plotly_chart(fig_cause, use_container_width=True)
+    else:
+        st.info("目前篩選期間無可能原因資料。")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── 高警訊藥物監測清單 ────────────────────────────────────
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">🚨 高警訊藥物（High-Alert Medications）監測清單</p>',
+                unsafe_allow_html=True)
+    st.caption("胰島素 · 抗凝血劑 · 濃縮電解質 · 鎮靜麻醉藥；依發生日期降冪")
+
+    _ha_df = df_drug_f[df_drug_f["高警訊"] == True].copy()
+
+    if not _ha_df.empty:
+        def _detect_stage(row):
+            if row.get("_stage_admin", 0): return "給藥階段"
+            if row.get("_stage_disp",  0): return "藥局調劑"
+            if row.get("_stage_order", 0): return "醫囑開立"
+            if row.get("_stage_trans", 0): return "傳送過程"
+            return "不明"
+
+        _ha_df["錯誤環節"] = _ha_df.apply(_detect_stage, axis=1)
+        _ha_show = (_ha_df[["發生日期","藥物名稱-應給藥名","藥物名稱-給錯藥名",
+                             "錯誤環節","年月"]]
+                    .rename(columns={"藥物名稱-應給藥名":"應給藥名",
+                                     "藥物名稱-給錯藥名":"給錯藥名"})
+                    .sort_values("發生日期", ascending=False)
+                    .head(30).reset_index(drop=True))
+
+        _env_bg = {"給藥階段":"#FADBD8","藥局調劑":"#D6EAF8",
+                   "醫囑開立":"#D5F5E3","傳送過程":"#FEF9E7","不明":"#F4F6F6"}
+
+        st.markdown("""
+<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:11px'>
+  <span style='background:#FADBD8;padding:2px 8px;border-radius:4px'>■ 給藥階段</span>
+  <span style='background:#D6EAF8;padding:2px 8px;border-radius:4px'>■ 藥局調劑</span>
+  <span style='background:#D5F5E3;padding:2px 8px;border-radius:4px'>■ 醫囑開立</span>
+  <span style='background:#FEF9E7;padding:2px 8px;border-radius:4px'>■ 傳送過程</span>
+</div>""", unsafe_allow_html=True)
+
+        _rows_html = ""
+        for _, row in _ha_show.iterrows():
+            bg  = _env_bg.get(row["錯誤環節"], "#F4F6F6")
+            w   = str(row.get("給錯藥名","")).strip()
+            wd  = w if w and w.lower() not in ["nan","","0"] else "—"
+            _rows_html += (
+                f"<tr style='background:{bg}'>"
+                f"<td style='padding:7px 10px;font-size:12px'>{row['發生日期']}</td>"
+                f"<td style='padding:7px 10px;font-size:12px;font-weight:600'>"
+                f"{str(row['應給藥名'])[:40]}</td>"
+                f"<td style='padding:7px 10px;font-size:12px;color:#C0392B'>"
+                f"{wd[:40]}</td>"
+                f"<td style='padding:7px 10px;font-size:11px'>"
+                f"<span style='background:{bg};border:1px solid #D0D3D4;"
+                f"border-radius:4px;padding:2px 7px;font-weight:600'>"
+                f"{row['錯誤環節']}</span></td>"
+                f"<td style='padding:7px 10px;font-size:12px;color:#5D6D7E'>"
+                f"{row['年月']}</td>"
+                f"</tr>"
+            )
+
+        st.markdown(f"""
+<table style='width:100%;border-collapse:collapse'>
+  <thead>
+    <tr style='background:#4A235A;color:white'>
+      <th style='padding:8px 10px;text-align:left;font-size:12px'>發生日期</th>
+      <th style='padding:8px 10px;text-align:left;font-size:12px'>應給藥名</th>
+      <th style='padding:8px 10px;text-align:left;font-size:12px'>給錯藥名</th>
+      <th style='padding:8px 10px;text-align:left;font-size:12px'>錯誤環節</th>
+      <th style='padding:8px 10px;text-align:left;font-size:12px'>年月</th>
+    </tr>
+  </thead>
+  <tbody>{_rows_html}</tbody>
+</table>""", unsafe_allow_html=True)
+        st.caption(f"共 {len(_ha_df)} 件高警訊藥物事件（顯示最近 {min(30,len(_ha_df))} 件）")
+    else:
+        st.info("目前篩選期間無高警訊藥物事件。")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
