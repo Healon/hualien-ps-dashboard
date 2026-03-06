@@ -22,85 +22,204 @@ st.set_page_config(
 # ── 全域樣式 ─────────────────────────────────────────────────
 st.markdown("""
 <style>
-    * { font-family: Arial, 'Helvetica Neue', sans-serif !important; }
-    .stApp { background-color: #F8F9FA; }
+    /* ── 1. 字體：引入 Inter（Google Fonts），回退至 Public Sans > system-ui ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    html, body, [class*="css"], .stApp, .stMarkdown, .stText,
+    button, input, select, textarea, label, p, span, div {
+        font-family: 'Inter', 'Public Sans', system-ui, -apple-system,
+                     'Helvetica Neue', Arial, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* ── 主背景 ─────────────────────────────── */
+    .stApp { background-color: #F4F6F8; }
+
+    /* ── 2. 語義化色彩系統定義（CSS 變數）─────── */
+    :root {
+        --color-title:    #1C2833;   /* 主標題：最高對比深黑 */
+        --color-subtitle: #5D6D7E;   /* 副標題/標籤：深藍灰 */
+        --color-body:     #2C3E50;   /* 內文 */
+        --color-muted:    #85929E;   /* 次要文字 */
+        --color-medical:  #2E86C1;   /* 醫務藍 */
+        --color-danger:   #C0392B;   /* 警示紅 */
+        --color-warning:  #F39C12;   /* 警告橙 */
+        --color-safe:     #1E8449;   /* 安全綠 */
+        --color-border:   #E5E8EC;
+        --color-bg-card:  #FFFFFF;
+        --gutter: 16px;
+    }
+
+    /* ── Sidebar ─────────────────────────────── */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a2e3d 0%, #2C3E50 100%);
+        background: linear-gradient(180deg, #152535 0%, #1C2E40 60%, #243447 100%);
     }
     [data-testid="stSidebar"] * { color: #D6EAF8 !important; }
-    [data-testid="stSidebar"] label { color: #AED6F1 !important; font-weight: 600; }
-
-    .kpi-card {
-        background: #FFFFFF; border-radius: 10px; padding: 18px 22px;
-        box-shadow: 0 1px 8px rgba(0,0,0,0.09);
-        border-left: 5px solid #3498DB; margin-bottom: 10px; min-height: 108px;
+    [data-testid="stSidebar"] label {
+        color: #AED6F1 !important;
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.3px;
     }
-    .kpi-card.danger  { border-left-color: #E74C3C; }
-    .kpi-card.warning { border-left-color: #F39C12; }
-    .kpi-card.death   { border-left-color: #C0392B; }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #EBF5FB !important;
+        font-weight: 700 !important;
+    }
+
+    /* ── 3. KPI 卡片：強化陰影、側邊提示條、gutter ─── */
+    .kpi-card {
+        background: var(--color-bg-card);
+        border-radius: 12px;
+        padding: 18px 22px 16px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
+        border-left: 5px solid var(--color-medical);
+        margin-bottom: var(--gutter);
+        min-height: 110px;
+        transition: box-shadow 0.2s ease;
+    }
+    .kpi-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .kpi-card.danger  { border-left-color: var(--color-danger); }
+    .kpi-card.warning { border-left-color: var(--color-warning); }
+    .kpi-card.death   { border-left-color: #7B241C; }
+    .kpi-card.safe    { border-left-color: var(--color-safe); }
 
     .kpi-label {
-        font-size: 11px; color: #2C3E50; font-weight: 700;
-        letter-spacing: 0.6px; margin-bottom: 5px; text-transform: uppercase;
+        font-size: 11px;
+        color: var(--color-subtitle);
+        font-weight: 700;
+        letter-spacing: 0.7px;
+        margin-bottom: 6px;
+        text-transform: uppercase;
     }
-    .kpi-value { font-size: 36px; font-weight: 900; color: #1C2833; line-height: 1.1; }
+    .kpi-value {
+        font-size: 36px;
+        font-weight: 900;
+        color: var(--color-title);
+        line-height: 1.1;
+        letter-spacing: -0.5px;
+    }
     .kpi-card.danger  .kpi-value { color: #922B21; }
     .kpi-card.warning .kpi-value { color: #7D6608; }
     .kpi-card.death   .kpi-value { color: #7B241C; }
-    .kpi-sub { font-size: 11px; color: #4D5656; margin-top: 4px; font-weight: 500; }
+    .kpi-sub {
+        font-size: 11px;
+        color: var(--color-muted);
+        margin-top: 5px;
+        font-weight: 500;
+        line-height: 1.4;
+    }
 
+    /* ── 圖表容器：gutter 16px、精緻陰影、圓角 ─── */
     .chart-container {
-        background: #FFFFFF; border-radius: 10px; padding: 20px;
-        box-shadow: 0 1px 8px rgba(0,0,0,0.07); margin-bottom: 16px;
+        background: var(--color-bg-card);
+        border-radius: 12px;
+        padding: 20px 22px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+        margin-bottom: var(--gutter);
+        border: 1px solid var(--color-border);
     }
-    .section-title {
-        font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 4px;
-    }
-    hr { border-color: #EAECEE; }
 
-    /* ── Tab 標籤文字高對比（覆蓋 Streamlit 所有版本的 selector）── */
+    /* ── 區塊標題統一 ────────────────────────── */
+    .section-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--color-title);
+        margin-bottom: 6px;
+        letter-spacing: -0.1px;
+    }
+    .section-subtitle {
+        font-size: 12px;
+        color: var(--color-subtitle);
+        margin-bottom: 10px;
+        font-weight: 500;
+    }
+
+    /* ── 4. 圖表精緻化：長條圖圓角（SVG path 處理）─ */
+    /* Plotly bar chart SVG 圓角（前端 CSS 不直接作用於 SVG path，
+       實際圓角由 Python 側 marker.line + bargap 控制，此處備用） */
+    .js-plotly-plot .plotly .bars path {
+        rx: 4px;
+    }
+
+    /* ── 水平分隔線 ──────────────────────────── */
+    hr { border-color: var(--color-border); margin: var(--gutter) 0; }
+
+    /* ── Streamlit 原生元件字色補正 ─────────────── */
+    .stSelectbox label,
+    .stMultiSelect label,
+    .stSlider label,
+    .stCaption,
+    .stCaption p {
+        color: var(--color-subtitle) !important;
+        font-size: 12px !important;
+    }
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        color: var(--color-title) !important;
+        font-weight: 700 !important;
+    }
+    .stMarkdown p {
+        color: var(--color-body);
+        line-height: 1.6;
+    }
+
+    /* ── Tab 標籤高對比（覆蓋所有 Streamlit 版本）── */
     .stTabs [data-baseweb="tab"] p,
     .stTabs [data-baseweb="tab"] span,
     .stTabs [data-baseweb="tab"] {
-        color: #1C2833 !important;
+        color: var(--color-body) !important;
         font-weight: 700 !important;
         font-size: 14px !important;
         opacity: 1 !important;
+        font-family: 'Inter', sans-serif !important;
     }
-    /* 選中 tab：深藍色 + 底線加粗 */
     .stTabs [aria-selected="true"] p,
     .stTabs [aria-selected="true"] span,
     .stTabs [aria-selected="true"] {
-        color: #154360 !important;
+        color: var(--color-medical) !important;
         font-weight: 800 !important;
         opacity: 1 !important;
     }
-    /* 未選中 tab 保持深灰可讀 */
     .stTabs [aria-selected="false"] p,
     .stTabs [aria-selected="false"] span,
     .stTabs [aria-selected="false"] {
-        color: #2C3E50 !important;
+        color: var(--color-subtitle) !important;
         font-weight: 600 !important;
         opacity: 1 !important;
     }
-    /* Tab 底線顏色加深 */
     .stTabs [data-baseweb="tab-highlight"] {
-        background-color: #1A5276 !important;
+        background-color: var(--color-medical) !important;
         height: 3px !important;
+        border-radius: 2px 2px 0 0 !important;
     }
     .stTabs [data-baseweb="tab-border"] {
-        background-color: #AEB6BF !important;
+        background-color: var(--color-border) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── 軸標題統一樣式（深色，確保可讀）────────────────────────
-# 所有圖表軸標題使用此字典，確保顏色一致
-AXIS_TITLE_FONT  = dict(size=13, color="#1C2833", family="Arial")   # 深黑，最高對比
-AXIS_TICK_FONT   = dict(size=10, color="#2C3E50", family="Arial")   # 深藍灰
-TITLE_FONT       = dict(size=16, color="#2C3E50", family="Arial")
-GRID_COLOR       = "#EAECEE"
+# ── 語義化色彩系統（Python 側，與 CSS 變數對應）─────────────
+COLOR_TITLE    = "#1C2833"   # 主標題：最高對比深黑
+COLOR_SUBTITLE = "#5D6D7E"   # 副標題/標籤
+COLOR_BODY     = "#2C3E50"   # 內文
+COLOR_MUTED    = "#85929E"   # 次要文字
+COLOR_MEDICAL  = "#2E86C1"   # 醫務藍
+COLOR_DANGER   = "#C0392B"   # 警示紅
+COLOR_WARNING  = "#F39C12"   # 警告橙
+COLOR_SAFE     = "#1E8449"   # 安全綠
+
+# ── 圖表字體與軸標題樣式（全面升級到 Inter）────────────────
+FONT_FAMILY      = "Inter, 'Public Sans', system-ui, Arial, sans-serif"
+AXIS_TITLE_FONT  = dict(size=13, color=COLOR_TITLE,    family=FONT_FAMILY)
+AXIS_TICK_FONT   = dict(size=10, color=COLOR_BODY,     family=FONT_FAMILY)
+TITLE_FONT       = dict(size=16, color=COLOR_TITLE,    family=FONT_FAMILY)
+SUBTITLE_FONT    = dict(size=12, color=COLOR_SUBTITLE, family=FONT_FAMILY)
+GRID_COLOR       = "#E8EAED"
 ZERO_LINE_COLOR  = "#BDC3C7"
 PLOT_BG          = "#FFFFFF"
 PAPER_BG         = "#FFFFFF"
@@ -760,11 +879,15 @@ with _tab1:
         fig_cat_bar = go.Figure(go.Bar(
             x=_cc_bar["類別"],
             y=_cc_bar["件數"],
-            marker_color=_bar_colors[:len(_cc_bar)],
-            marker_opacity=0.88,
+            marker=dict(
+                color=_bar_colors[:len(_cc_bar)],
+                opacity=0.90,
+                cornerradius=6,        # 長條圖圓角
+                line=dict(width=0),    # 無邊框更簡潔
+            ),
             text=_cc_bar["件數"],
             textposition="outside",
-            textfont=dict(size=11, color="#1C2833", family="Arial Bold"),
+            textfont=dict(size=11, color=COLOR_TITLE, family=FONT_FAMILY),
             hovertemplate="<b>%{x}</b>：%{y} 件<extra></extra>",
         ))
         fig_cat_bar.update_layout(
@@ -772,7 +895,7 @@ with _tab1:
             plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
             xaxis=dict(
                 title=dict(text="事件類別", font=AXIS_TITLE_FONT),
-                tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                tickfont=dict(size=11, color=COLOR_BODY, family=FONT_FAMILY),
                 categoryorder="total descending",
                 showgrid=False,
             ),
@@ -781,10 +904,10 @@ with _tab1:
                 tickfont=AXIS_TICK_FONT,
                 gridcolor=GRID_COLOR, griddash="dot",
                 zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
-                range=[0, _cc_bar["件數"].max() * 1.25],
+                range=[0, _cc_bar["件數"].max() * 1.28],
             ),
             margin=dict(t=20, b=50, l=60, r=30),
-            bargap=0.3,
+            bargap=0.32,
         )
         st.plotly_chart(fig_cat_bar, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -797,17 +920,18 @@ with _tab1:
         st.caption("前三名事件以亮色凸顯，其餘淡色；檢視資源配置優先順序")
 
         _top3_labels = _cc["類別"].tolist()[:3]
+        _total_events = int(_cc["件數"].sum())
         fig_donut = go.Figure(go.Pie(
             labels=_cc["類別"],
             values=_cc["件數"],
-            hole=0.52,
+            hole=0.54,
             marker=dict(
                 colors=_unified_colors,
-                line=dict(color="#FFFFFF", width=2),
+                line=dict(color="#FFFFFF", width=2.5),
             ),
             textinfo="label+percent",
-            textfont=dict(size=10, color="#1C2833"),
-            pull=[0.06 if i < 3 else 0 for i in range(len(_cc))],  # 前三名外凸
+            textfont=dict(size=10, color="#1C2833", family=FONT_FAMILY),
+            pull=[0.06 if i < 3 else 0 for i in range(len(_cc))],
             hovertemplate="<b>%{label}</b><br>%{value} 件（%{percent}）<extra></extra>",
             sort=False,
         ))
@@ -815,9 +939,9 @@ with _tab1:
             height=300, paper_bgcolor=PAPER_BG, showlegend=False,
             margin=dict(t=10, b=10, l=10, r=10),
             annotations=[dict(
-                text=f"TOP 3<br><span style='font-size:9px'>{' / '.join(_top3_labels[:3])}</span>",
+                text=f"<b>{_total_events}</b><br><span style='font-size:9px'>件</span>",
                 x=0.5, y=0.5,
-                font=dict(size=10, color="#2C3E50"),
+                font=dict(size=18, color=COLOR_TITLE, family=FONT_FAMILY),
                 showarrow=False,
             )],
         )
