@@ -1100,6 +1100,269 @@ with _tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ════════════════════════════════════════════════════════════
+    #  PAGE 1 · 精神科跌倒深度分析（W11 / W12，側邊欄連動）
+    # ════════════════════════════════════════════════════════════
+    _PSYCH_WARDS = ["W11", "W12"]
+    if sel_unit in _PSYCH_WARDS:
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f"""
+<div style='background:linear-gradient(135deg,#1B2631,#4A235A);
+            padding:14px 22px;border-radius:10px;margin-bottom:14px;
+            border-left:5px solid #7D3C98'>
+  <h2 style='color:#FFFFFF;margin:0;font-size:18px;font-weight:700'>
+    🧠 精神科跌倒深度分析（{sel_unit} 專屬）
+  </h2>
+  <p style='color:#D7BDE2;margin:4px 0 0;font-size:11px'>
+    W11・W12 急性精神科病房 · 認知行為風險 · 藥物影響 · 月趨勢追蹤
+    ｜篩選期間：{start_m} ～ {end_m}
+  </p>
+</div>""", unsafe_allow_html=True)
+
+        # ── 資料準備 ──────────────────────────────────────────
+        # df_fall_base 已在 load_data 中 merge「單位」欄位
+        _pf_all = df_fall_base[
+            df_fall_base["單位"].isin(_PSYCH_WARDS)
+        ].copy()
+
+        _ps, _pe = st.session_state["date_range"]
+        _pf_t = _pf_all[(_pf_all["年月"] >= _ps) & (_pf_all["年月"] <= _pe)].copy()
+        _pf_h = _pf_all[~((_pf_all["年月"] >= _ps) & (_pf_all["年月"] <= _pe))].copy()
+
+        _nt = len(_pf_t)
+        _nh = len(_pf_h)
+        _h_months = max(_pf_h["年月"].nunique(), 1)
+        _h_avg    = round(_nh / _h_months, 1)
+
+        # ── KPI 三卡（紫色系）────────────────────────────────
+        _kp1, _kp2, _kp3 = st.columns(3)
+        _ks = ("background:#FFFFFF;border-radius:12px;padding:16px 18px;"
+               "box-shadow:0 2px 10px rgba(0,0,0,0.09);"
+               "border-left:5px solid {c};min-height:96px")
+
+        def _pk(col, title, val, sub, c):
+            col.markdown(
+                f"<div style='{_ks.format(c=c)}'>"
+                f"<div style='font-size:11px;color:#5D6D7E;font-weight:700;"
+                f"letter-spacing:0.5px;margin-bottom:6px'>{title}</div>"
+                f"<div style='font-size:28px;font-weight:900;color:#1C2833;"
+                f"line-height:1.1'>{val}</div>"
+                f"<div style='font-size:11px;color:#85929E;margin-top:4px'>{sub}</div>"
+                f"</div>", unsafe_allow_html=True)
+
+        _cog_t = int(_pf_t["可能原因-意識或認知障礙"].fillna(0).sum()) if "可能原因-意識或認知障礙" in _pf_t.columns else 0
+        _cog_h = int(_pf_h["可能原因-意識或認知障礙"].fillna(0).sum()) if "可能原因-意識或認知障礙" in _pf_h.columns else 0
+        _cog_tp = round(_cog_t / max(_nt, 1) * 100, 0)
+        _cog_hp = round(_cog_h / max(_nh, 1) * 100, 0)
+        _cog_flag = "⚠️ " if _cog_tp > _cog_hp + 15 else ""
+
+        _drug_t  = int(_pf_t["可能原因-與使用藥物相關"].fillna(0).sum()) if "可能原因-與使用藥物相關" in _pf_t.columns else 0
+        _drug_tp = round(_drug_t / max(_nt, 1) * 100, 0)
+        _sed_t   = int(_pf_t["可能原因-鎮靜安眠藥"].fillna(0).sum()) if "可能原因-鎮靜安眠藥" in _pf_t.columns else 0
+        _sed_tp  = round(_sed_t / max(_nt, 1) * 100, 0)
+
+        _pk(_kp1, f"🧠 {_cog_flag}意識/認知障礙佔比",
+            f"{_cog_tp:.0f}%",
+            f"本期 {_cog_t} 件 ｜ 精神科歷史均 {_cog_hp:.0f}%", "#7D3C98")
+        _pk(_kp2, "💊 藥物相關佔比",
+            f"{_drug_tp:.0f}%",
+            f"本期 {_drug_t} 件（含鎮靜 {_sed_tp:.0f}%）", "#C0392B")
+        _pk(_kp3, "📋 本期跌倒件數",
+            f"{_nt} 件",
+            f"精神科歷史月均 {_h_avg} 件／月", "#1A5276")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── 子區塊 1：風險因子雙條對比圖 ─────────────────────
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.markdown('<p class="section-title">📊 風險因子比較：本期 vs 精神科歷史均值</p>',
+                    unsafe_allow_html=True)
+        st.caption("紅色 = 本篩選期間，藍色 = 精神科歷史均值；百分比以各期跌倒件數為分母")
+
+        _rf_def = [
+            ("意識/認知障礙",  "可能原因-意識或認知障礙"),
+            ("步態不穩",       "可能原因-步態不穩"),
+            ("身體虛弱",       "可能原因-身體虛弱"),
+            ("鎮靜安眠藥",     "可能原因-鎮靜安眠藥"),
+            ("降壓藥",         "可能原因-降壓藥"),
+            ("抗癲癇藥",       "可能原因-抗癲癇藥"),
+            ("抗憂鬱劑",       "可能原因-抗憂鬱劑"),
+            ("執意自行下床",   "可能原因-高危險群病人執意自行下床或活動"),
+            ("躁動",           "可能原因-躁動"),
+            ("其他行為因素",   "可能原因-其他與病人生理及行為因素相關"),
+        ]
+
+        _rf_lbls, _rf_tp, _rf_hp = [], [], []
+        for _lbl, _col in _rf_def:
+            _n_t = int(_pf_t[_col].fillna(0).sum()) if _col in _pf_t.columns else 0
+            _n_h = int(_pf_h[_col].fillna(0).sum()) if _col in _pf_h.columns else 0
+            _rf_lbls.append(_lbl)
+            _rf_tp.append(round(_n_t / max(_nt, 1) * 100, 1))
+            _rf_hp.append(round(_n_h / max(_nh, 1) * 100, 1))
+
+        fig_rf = go.Figure()
+        fig_rf.add_trace(go.Bar(
+            name=f"本期（{start_m}～{end_m}）",
+            x=_rf_lbls, y=_rf_tp,
+            marker=dict(color="#C0392B", opacity=0.88, line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in _rf_tp],
+            textposition="outside",
+            textfont=dict(size=10, color="#1C2833", family="Arial"),
+        ))
+        fig_rf.add_trace(go.Bar(
+            name="精神科歷史均值",
+            x=_rf_lbls, y=_rf_hp,
+            marker=dict(color="#2471A3", opacity=0.55, line=dict(width=0)),
+            text=[f"{v:.0f}%" for v in _rf_hp],
+            textposition="outside",
+            textfont=dict(size=10, color="#1C2833", family="Arial"),
+        ))
+        fig_rf.update_layout(
+            barmode="group", height=360,
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="風險因子", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+                       showgrid=False),
+            yaxis=dict(title=dict(text="佔比（%）", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, max(max(_rf_tp, default=0),
+                                     max(_rf_hp, default=0)) * 1.3 + 5]),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                        font=dict(size=11, color="#2C3E50")),
+            margin=dict(t=40, b=60, l=60, r=30),
+            bargap=0.2, bargroupgap=0.05,
+        )
+        st.plotly_chart(fig_rf, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── 子區塊 2：精神科跌倒月趨勢 ──────────────────────
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.markdown('<p class="section-title">📈 精神科跌倒月趨勢（歷史全覽）</p>',
+                    unsafe_allow_html=True)
+        st.caption("灰色折線 = 歷史全期；紅色圓點 = 本篩選期間；虛線 = 精神科歷史月均")
+
+        _pf_mly = (_pf_all.groupby("年月").size()
+                   .reset_index(name="件數").sort_values("年月"))
+        _pf_mly["年月顯示"] = _pf_mly["年月"].str.replace("-", "/", regex=False)
+        _pf_mly["目標期"] = (_pf_mly["年月"] >= _ps) & (_pf_mly["年月"] <= _pe)
+
+        fig_pt = go.Figure()
+        fig_pt.add_trace(go.Scatter(
+            x=_pf_mly["年月顯示"], y=_pf_mly["件數"],
+            mode="lines+markers",
+            line=dict(color="#AEB6BF", width=2),
+            marker=dict(size=5, color="#AEB6BF"),
+            name="歷史全期",
+        ))
+        _tgt_mly = _pf_mly[_pf_mly["目標期"]]
+        if not _tgt_mly.empty:
+            fig_pt.add_trace(go.Scatter(
+                x=_tgt_mly["年月顯示"], y=_tgt_mly["件數"],
+                mode="markers",
+                marker=dict(size=11, color="#C0392B", symbol="circle",
+                            line=dict(color="#FFFFFF", width=1.5)),
+                name=f"本期（{start_m}～{end_m}）",
+            ))
+        fig_pt.add_hline(
+            y=_h_avg, line_dash="dot", line_color="#7D3C98", line_width=1.5,
+            annotation_text=f"月均 {_h_avg} 件",
+            annotation_position="top right",
+            annotation_font=dict(size=10, color="#7D3C98"),
+        )
+        fig_pt.update_layout(
+            height=280, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="年月", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=9, color="#2C3E50", family="Arial"),
+                       tickangle=45, showgrid=False),
+            yaxis=dict(title=dict(text="跌倒件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot",
+                       rangemode="tozero"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                        font=dict(size=11, color="#2C3E50")),
+            margin=dict(t=40, b=70, l=60, r=30),
+        )
+        st.plotly_chart(fig_pt, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── 子區塊 3：近期事件逐件摘要表 ────────────────────
+        if _nt > 0:
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            st.markdown('<p class="section-title">📋 本期精神科跌倒事件逐件摘要</p>',
+                        unsafe_allow_html=True)
+            st.caption("依年月排列；標籤自動從通報欄位萃取（🧠認知 💊藥物 ⚡行為 🦵肌力）")
+
+            # 標籤定義
+            _tag_def = [
+                ("🧠認知障礙", "可能原因-意識或認知障礙",           "#E8DAEF", "#6C3483"),
+                ("💊鎮靜藥",   "可能原因-鎮靜安眠藥",               "#FADBD8", "#922B21"),
+                ("💊降壓藥",   "可能原因-降壓藥",                   "#FADBD8", "#922B21"),
+                ("💊抗癲癇",   "可能原因-抗癲癇藥",                 "#FADBD8", "#922B21"),
+                ("🦵步態不穩", "可能原因-步態不穩",                 "#D6EAF8", "#1A5276"),
+                ("⚡執意下床", "可能原因-高危險群病人執意自行下床或活動","#FEF9E7","#7D6608"),
+                ("🔴躁動",     "可能原因-躁動",                     "#FADBD8", "#922B21"),
+            ]
+
+            _rows_html = ""
+            for _, row in _pf_t.sort_values("年月", ascending=False).iterrows():
+                _cid  = str(row.get("通報案號", ""))
+                _ym   = str(row.get("年月", ""))
+                _hd   = str(row.get("跌倒事件發生對象-事件發生前是否為跌倒高危險群","")) == "是"
+                _desc = str(row.get("事件說明",""))
+                _desc_s = (_desc[:90] + "…") if len(_desc) > 90 else _desc
+
+                # 產生標籤
+                _tags_html = ""
+                for _tlbl, _tcol, _tbg, _tclr in _tag_def:
+                    if row.get(_tcol, 0):
+                        _tags_html += (f"<span style='display:inline-block;font-size:10px;"
+                                       f"background:{_tbg};color:{_tclr};"
+                                       f"border-radius:4px;padding:1px 6px;margin:1px 2px'>"
+                                       f"{_tlbl}</span>")
+
+                _hd_badge = (
+                    "<span style='display:inline-block;font-size:10px;"
+                    "background:#FADBD8;color:#922B21;"
+                    "border-radius:4px;padding:1px 6px;margin:1px 2px'>⚠️高危群</span>"
+                ) if _hd else ""
+
+                _rows_html += (
+                    f"<tr style='border-bottom:0.5px solid #EAECEE'>"
+                    f"<td style='padding:8px 10px;font-size:11px;color:#5D6D7E;"
+                    f"white-space:nowrap'>{_ym}</td>"
+                    f"<td style='padding:8px 10px;font-size:11px;color:#2C3E50'>{_cid}</td>"
+                    f"<td style='padding:8px 10px;font-size:11px'>{_hd_badge}{_tags_html}</td>"
+                    f"<td style='padding:8px 10px;font-size:11px;color:#2C3E50;"
+                    f"line-height:1.5'>{_desc_s}</td>"
+                    f"</tr>"
+                )
+
+            st.markdown(f"""
+<div style='overflow-x:auto'>
+<table style='width:100%;border-collapse:collapse;font-family:Arial,sans-serif'>
+  <thead>
+    <tr style='background:#4A235A;color:white'>
+      <th style='padding:8px 10px;text-align:left;font-size:11px;white-space:nowrap'>年月</th>
+      <th style='padding:8px 10px;text-align:left;font-size:11px;white-space:nowrap'>案號</th>
+      <th style='padding:8px 10px;text-align:left;font-size:11px;min-width:160px'>風險標籤</th>
+      <th style='padding:8px 10px;text-align:left;font-size:11px'>事件摘要</th>
+    </tr>
+  </thead>
+  <tbody>{_rows_html}</tbody>
+</table>
+</div>""", unsafe_allow_html=True)
+            st.caption(f"共 {_nt} 件；顯示全部本期事件")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+
 with _tab2:
 
 
