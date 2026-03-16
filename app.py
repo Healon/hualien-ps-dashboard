@@ -756,7 +756,6 @@ with _tab1:
 
     with _l2a:
         # ── 事件類別長條圖（X=類別，Y=件數，依件數降冪，隨篩選動態排列）
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📊 各事件類別發生件數（依件數排列）</p>',
                     unsafe_allow_html=True)
         st.caption("件數排序隨篩選時間區間即時更新；🔴🟠🔵 = 前三高發類別")
@@ -792,11 +791,9 @@ with _tab1:
             bargap=0.3,
         )
         st.plotly_chart(fig_cat_bar, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with _l2b:
         # ── 事件類別甜甜圈（前三名亮色，其他淡色）────────────
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">🍩 事件類別佔比分布</p>',
                     unsafe_allow_html=True)
         st.caption("前三名事件以亮色凸顯，其餘淡色；檢視資源配置優先順序")
@@ -838,7 +835,6 @@ with _tab1:
                 f"{_icon} <b>{lbl}</b>：{_cnt} 件（{_pct:.1f}%）</div>",
                 unsafe_allow_html=True
             )
-        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -966,7 +962,6 @@ with _tab1:
 
 
     # ── 時段 × 事件大類 交叉熱力圖 ──────────────────────────────
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">🌡 時段 × 事件類別 情境熱力圖（ROI 行動熱區）</p>',
                 unsafe_allow_html=True)
     st.caption("顏色越深 = 在該時段、該類別的事件越密集 → 管理介入投資報酬率最高的情境")
@@ -1025,12 +1020,10 @@ with _tab1:
         st.plotly_chart(fig_hm_slot, use_container_width=True)
     else:
         st.info("目前篩選條件下無時段資料。")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════
     #  PAGE 1 · Level 3b：單位 × 事件類別 情境熱力圖
     # ════════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">🏢 單位 × 事件類別 情境熱力圖</p>',
                 unsafe_allow_html=True)
     st.caption("各單位在各事件類別的集中度 — 顏色越深代表該單位該類別件數越多，可識別高風險單位與事件組合")
@@ -1096,7 +1089,6 @@ with _tab1:
         st.plotly_chart(fig_uc_hm, use_container_width=True)
     else:
         st.info("目前篩選條件下無資料。")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1175,7 +1167,6 @@ with _tab1:
         st.markdown("<br>", unsafe_allow_html=True)
 
         # ── 子區塊 1：風險因子雙條對比圖 ─────────────────────
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📊 風險因子比較：本期 vs 精神科歷史均值</p>',
                     unsafe_allow_html=True)
         st.caption("紅色 = 本篩選期間，藍色 = 精神科歷史均值；百分比以各期跌倒件數為分母")
@@ -1235,12 +1226,10 @@ with _tab1:
             bargap=0.2, bargroupgap=0.05,
         )
         st.plotly_chart(fig_rf, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
         # ── 子區塊 2：精神科跌倒月趨勢 ──────────────────────
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
         st.markdown('<p class="section-title">📈 精神科跌倒月趨勢（歷史全覽）</p>',
                     unsafe_allow_html=True)
         st.caption("灰色折線 = 歷史全期；紅色圓點 = 本篩選期間；虛線 = 精神科歷史月均")
@@ -1287,13 +1276,11 @@ with _tab1:
             margin=dict(t=40, b=70, l=60, r=30),
         )
         st.plotly_chart(fig_pt, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
         # ── 子區塊 3：近期事件逐件摘要表 ────────────────────
         if _nt > 0:
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
             st.markdown('<p class="section-title">📋 本期精神科跌倒事件逐件摘要</p>',
                         unsafe_allow_html=True)
             st.caption("依年月排列；標籤自動從通報欄位萃取（🧠認知 💊藥物 ⚡行為 🦵肌力）")
@@ -1358,7 +1345,6 @@ with _tab1:
 </table>
 </div>""", unsafe_allow_html=True)
             st.caption(f"共 {_nt} 件；顯示全部本期事件")
-            st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1382,9 +1368,7 @@ with _tab2:
     </div>""", unsafe_allow_html=True)
 
 
-    st.markdown('</div>', unsafe_allow_html=True)
     # ── 年度比較區塊 ─────────────────────────────────────────
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
                 padding:12px 20px;border-radius:8px;margin-bottom:14px'>
@@ -1649,7 +1633,6 @@ with _tab2:
     )
     st.plotly_chart(fig_yr2, use_container_width=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 
@@ -1673,7 +1656,6 @@ with _tab2:
     #  圖A：每月件數 + 發生率（雙軸）
     #  軸標題：深色 #1C2833，字體 13px Bold
     # ════════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     fig_a = make_subplots(specs=[[{"secondary_y": True}]])
     fig_a.add_trace(go.Bar(
         x=mc["年月顯示"], y=mc["件數"], name="發生件數",
@@ -1718,14 +1700,12 @@ with _tab2:
         secondary_y=True,
     )
     st.plotly_chart(fig_a, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
     # ════════════════════════════════════════════════════════════
     #  圖B：管制圖
     #  軸標題：深色，控制線標籤各自使用線條顏色
     # ════════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     rates = mc["發生率"].replace(0, np.nan).dropna()
     if len(rates) >= 3:
         cl  = float(rates.mean())
@@ -1811,13 +1791,11 @@ with _tab2:
             st.markdown(f'<div style="background:#FFF3CD;border-left:4px solid #F39C12;padding:10px 14px;border-radius:4px;color:#7D4700;font-size:13px">⚠️ 共 <b>{len(outliers)}</b> 個月份超出管制界限，請重點追蹤！</div>', unsafe_allow_html=True)
     else:
         st.info("📌 管制圖需要至少 3 個月資料，請擴大時間區間。")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
     # ════════════════════════════════════════════════════════════
     #  圖E：各類別堆疊趨勢
     # ════════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     cat_m = dff.groupby(["年月顯示","事件大類"]).size().reset_index(name="件數")
     if not cat_m.empty:
         piv = cat_m.pivot(index="年月顯示", columns="事件大類", values="件數").fillna(0)
@@ -1845,7 +1823,6 @@ with _tab2:
             ),
             hovermode="x unified", margin=dict(t=60, b=60))
         st.plotly_chart(fig_e, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
     # ════════════════════════════════════════════════════════════
@@ -1854,7 +1831,6 @@ with _tab2:
     SENIORITY_ORDER = ["未滿1年","1-5年","6-10年","11-15年","16-20年","21-25年","26年以上"]
     SENIORITY_COLORS = ["#003f5c","#2f6a8f","#3498DB","#5dade2","#85c1e9","#aed6f1","#d6eaf8"]
 
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     seniority_col = "通報者資料-工作年資"
 
     if seniority_col in dff.columns:
@@ -2018,7 +1994,6 @@ with _tab2:
     # 中度以上傷害：中度、重度、極重度、死亡
     HIGH_INJURY   = ["中度","重度","極重度","死亡"]
 
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     dept_label = sel_dept if sel_dept != "全部科別" else "全院"
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
@@ -2158,12 +2133,10 @@ with _tab2:
 
 
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════
     #  圖F：各單位熱力圖
     # ════════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     top_u = dff["單位"].value_counts().head(15).index.tolist()
     um = (dff[dff["單位"].isin(top_u)]
           .groupby(["年月顯示","單位"]).size().reset_index(name="件數"))
@@ -2195,7 +2168,6 @@ with _tab2:
             ),
             margin=dict(t=60, b=80, l=90, r=90))
         st.plotly_chart(fig_f, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
     # ── 明細表 ───────────────────────────────────────────────────
@@ -2231,7 +2203,6 @@ with _tab2:
     #  資料來源：109-113跌倒工作表 merge 全部工作表
     #  時間區間與主篩選器連動
     # ════════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown("""
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
                 padding:14px 20px;border-radius:8px;margin-bottom:16px'>
@@ -2479,8 +2450,6 @@ with _tab2:
     else:
         st.info("目前期間內無跌倒事件資料，或科別欄位缺失。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">🏆 各病房 / 單位事件件數排名（Top 20）</p>',
                 unsafe_allow_html=True)
 
@@ -2543,7 +2512,6 @@ with _tab2:
             "高嚴重度佔比":"死亡+重大佔比(%)"})
         st.caption("📋 Top 10 單位詳細數據")
         st.dataframe(top10, use_container_width=True, height=310)
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════
     #  📝 事件說明特徵萃取分析
@@ -2563,7 +2531,6 @@ with _tab2:
     else:
         dff_fall_feat = dff_fall.copy()
 
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     dept_label_feat = sel_dept if sel_dept != "全部科別" else "全院"
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
@@ -3072,7 +3039,6 @@ with _tab2:
         else:
             st.info("目前資料不足以產生交叉熱力圖。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
     # ════════════════════════════════════════════════════════════
@@ -3098,7 +3064,6 @@ with _tab2:
         "肌肉鬆弛劑": "可能原因-肌肉鬆弛劑",
     }
 
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
                 padding:14px 20px;border-radius:8px;margin-bottom:16px'>
@@ -3190,7 +3155,6 @@ with _tab2:
         else:
             st.info("各目標科別件數不足，無法產生熱力矩陣。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 
@@ -3283,7 +3247,6 @@ with _tab3:
     # ════════════════════════════════════════════════════════
     #  漏斗圖（左）+ 劑型分布（右）
     # ════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown("""<div style='background:#F4ECF7;border-radius:8px;
         padding:10px 16px;margin-bottom:12px'>
       <span style='font-size:14px;font-weight:700;color:#4A235A'>
@@ -3369,12 +3332,10 @@ with _tab3:
         else:
             st.info("目前篩選期間無劑型資料。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════
     #  錯誤子類型橫條圖（Top 20）
     # ════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">🔎 各環節錯誤子類型明細（Top 20）</p>',
                 unsafe_allow_html=True)
     st.caption("識別最需系統性介入的具體錯誤類型；顏色代表所屬流程環節")
@@ -3438,12 +3399,10 @@ with _tab3:
     else:
         st.info("目前篩選期間無錯誤子類型資料。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════
     #  可能原因分析（Top 20）
     # ════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">🧩 可能原因分析（Top 20）</p>',
                 unsafe_allow_html=True)
     st.caption("多選欄位加總；同一事件可歸因多項原因")
@@ -3510,12 +3469,10 @@ with _tab3:
     else:
         st.info("目前篩選期間無可能原因資料。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════
     #  高警訊藥物監測清單
     # ════════════════════════════════════════════════════════
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
     st.markdown('<p class="section-title">🚨 高警訊藥物（High-Alert Medications）監測清單</p>',
                 unsafe_allow_html=True)
     st.caption("胰島素 · 抗凝血劑 · 濃縮電解質 · 鎮靜麻醉藥；依發生日期降冪排列")
@@ -3588,7 +3545,6 @@ with _tab3:
     else:
         st.info("目前篩選期間無高警訊藥物事件。")
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ── 頁底 ─────────────────────────────────────────────────────
