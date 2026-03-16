@@ -204,7 +204,8 @@ def load_data(path):
         "通報案號",
         "病人/住民-所在科別",
         "病人/住民-事件發生後對病人健康的影響程度",
-        "病人/住民-事件發生後對病人健康的影響程度(彙總)"
+        "病人/住民-事件發生後對病人健康的影響程度(彙總)",
+        "單位",   # 供精神科下鑽篩選使用
     ]
     # 去除空白避免比對失敗
     for col in cols_from_all[1:]:
@@ -1099,13 +1100,305 @@ with _tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+with _tab2:
+
+
     # ════════════════════════════════════════════════════════════
-    #  PAGE 1 · Level 4：長期趨勢移入（月趨勢 / 類別趨勢 / 年資）
+    #  PAGE 2：長期趨勢與深度比較
+    # ════════════════════════════════════════════════════════════
+    st.markdown(f"""
+    <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
+                padding:14px 22px;border-radius:10px;margin-bottom:14px'>
+      <h2 style='color:#FFFFFF;margin:0;font-size:19px;font-weight:700'>
+        📈 長期趨勢與深度比較
+      </h2>
+      <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
+        年度比較 · 月趨勢 · 管制圖 · 工作年資 · 診斷特徵 · 風險因子
+        ｜篩選期間 {{start_m}} ～ {{end_m}}
+      </p>
+    </div>""", unsafe_allow_html=True)
+
+
+    st.markdown('</div>', unsafe_allow_html=True)
+    # ── 年度比較區塊 ─────────────────────────────────────────
+    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
+                padding:12px 20px;border-radius:8px;margin-bottom:14px'>
+      <h3 style='color:#FFFFFF;margin:0;font-size:17px;font-weight:700'>
+        📅 年度比較分析（2024 vs 2025）
+      </h3>
+      <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
+        全院層級・不受科別篩選影響・範圍：{inc_ltc}
+      </p>
+    </div>""", unsafe_allow_html=True)
+
+    # ── 4個指標卡（含紅綠燈警示 + Tooltip 定義）────────────────
+    def _kpi_card(label, value, delta_val, delta_txt, up_is_bad=True, tooltip=""):
+        """
+        醫療專業 KPI 卡片
+        - 越低越好 (up_is_bad=True)：上升→紅燈、下降→綠燈
+        - 越高越好 (up_is_bad=False)：上升→綠燈、下降→紅燈
+        - tooltip: 右上角懸停說明（分子分母定義）
+        """
+        if delta_val > 0:
+            arrow  = "▲"
+            d_color = "#C0392B" if up_is_bad else "#1E8449"
+            d_bg    = "#FADBD8" if up_is_bad else "#D5F5E3"
+            led     = "#E74C3C" if up_is_bad else "#27AE60"   # 左邊指示條顏色
+            status  = "⛔" if up_is_bad else "✅"
+        elif delta_val < 0:
+            arrow  = "▼"
+            d_color = "#1E8449" if up_is_bad else "#C0392B"
+            d_bg    = "#D5F5E3" if up_is_bad else "#FADBD8"
+            led     = "#27AE60" if up_is_bad else "#E74C3C"
+            status  = "✅" if up_is_bad else "⛔"
+        else:
+            arrow, d_color, d_bg = "─", "#7F8C8D", "#F2F3F4"
+            led    = "#AEB6BF"
+            status = "➖"
+
+        # 數值字體在指標惡化時加粗強調
+        val_weight = "900" if (up_is_bad and delta_val > 0) or (not up_is_bad and delta_val < 0) else "800"
+        val_color  = "#C0392B" if (up_is_bad and delta_val > 0) else "#1C2833"
+
+        if tooltip:
+            # 清理 tooltip 文字：移除換行、單引號、雙引號，避免破壞 HTML 屬性
+            _tip_clean = (tooltip
+                          .replace("\n", " ")
+                          .replace("'", "")
+                          .replace('"', "")
+                          .replace("=", "＝")
+                          .replace("<", "＜")
+                          .replace(">", "＞"))
+            tooltip_html = (
+                f'<div title="{_tip_clean}" '
+                f'style="position:absolute;top:10px;right:12px;'
+                f'width:18px;height:18px;background:#EBF5FB;border-radius:50%;'
+                f'display:flex;align-items:center;justify-content:center;'
+                f'font-size:11px;color:#2E86C1;cursor:help;'
+                f'border:1px solid #AED6F1;font-weight:700;">ℹ</div>'
+            )
+        else:
+            tooltip_html = ""
+
+        return f"""
+    <div style='background:#FFFFFF;border-left:5px solid {led};border-radius:10px;
+                padding:16px 18px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.09);
+                position:relative;min-height:110px'>
+      {tooltip_html}
+      <div style='font-size:11px;color:#5D6D7E;font-weight:700;
+                  letter-spacing:0.4px;margin-bottom:8px;padding-right:24px'>
+        {status} {label}
+      </div>
+      <div style='font-size:32px;font-weight:{val_weight};color:{val_color};
+                  line-height:1.1;letter-spacing:-0.5px'>{value}</div>
+      <div style='font-size:11px;font-weight:700;color:{d_color};
+                  background:{d_bg};border-radius:4px;
+                  padding:3px 8px;display:inline-block;margin-top:8px'>
+        {arrow} {delta_txt}
+      </div>
+    </div>"""
+
+    # 指標定義 Tooltip
+    TOOLTIP_INJ   = "跌倒有傷害率 = 有傷害件數 ÷ 跌倒總件數\n傷害判斷：病人健康影響程度(彙總) = 有傷害"
+    TOOLTIP_PSYCH = "精神科跌倒占比 = 精神科跌倒件數 ÷ 全院跌倒總件數"
+    TOOLTIP_MID   = "中度以上傷害率 = 外科+內科中，中度/重度/極重度/死亡件數 ÷ 外科+內科跌倒總件數"
+    TOOLTIP_HARM  = "傷害行為件數 = 事件大類為「傷害」的通報件數（全院）"
+
+    mk1, mk2, mk3, mk4 = st.columns(4)
+    with mk1:
+        delta_inj = round(v25_inj - v24_inj, 2)
+        st.markdown(_kpi_card(
+            "跌倒有傷害率",
+            f"{v25_inj:.2f}%",
+            delta_inj,
+            f"{delta_inj:+.2f}% vs 2024（{v24_inj:.2f}%）",
+            up_is_bad=True, tooltip=TOOLTIP_INJ,
+        ), unsafe_allow_html=True)
+    with mk2:
+        delta_psych = round(v25_psych - v24_psych, 2)
+        st.markdown(_kpi_card(
+            "精神科跌倒占比",
+            f"{v25_psych:.2f}%",
+            delta_psych,
+            f"{delta_psych:+.2f}% vs 2024（{v24_psych:.2f}%）",
+            up_is_bad=True, tooltip=TOOLTIP_PSYCH,
+        ), unsafe_allow_html=True)
+    with mk3:
+        delta_mid = round(v25_mid - v24_mid, 2)
+        st.markdown(_kpi_card(
+            "中度以上傷害率（外科+內科）",
+            f"{v25_mid:.2f}%",
+            delta_mid,
+            f"{delta_mid:+.2f}% vs 2024（{v24_mid:.2f}%）",
+            up_is_bad=True, tooltip=TOOLTIP_MID,
+        ), unsafe_allow_html=True)
+    with mk4:
+        delta_harm = n25_harm - n24_harm
+        st.markdown(_kpi_card(
+            "傷害行為年件數",
+            f"{n25_harm} 件",
+            delta_harm,
+            f"{delta_harm:+d} 件 vs 2024（{n24_harm}件）",
+            up_is_bad=True, tooltip=TOOLTIP_HARM,
+        ), unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 圖①：跌倒月份趨勢比較折線圖 ─────────────────────────
+    st.markdown('<p class="section-title">① 跌倒事件月份趨勢比較（2024 vs 2025 vs 歷年均值）</p>',
+                unsafe_allow_html=True)
+
+    # 各年月份件數
+    def _monthly_counts(df, yr):
+        sub = df[df["年"] == yr]
+        return sub.groupby("月").size().reindex(range(1,13), fill_value=0)
+
+    cnt24  = _monthly_counts(_fb, 2024)
+    cnt25  = _monthly_counts(_fb, 2025)
+    # 2020-2023 歷年平均
+    hist_mean = pd.Series(0.0, index=range(1,13))
+    hist_yrs  = [y for y in [2020,2021,2022,2023] if y in _fb["年"].values]
+    if hist_yrs:
+        hist_mean = pd.concat(
+            [_monthly_counts(_fb, y) for y in hist_yrs], axis=1
+        ).mean(axis=1)
+
+    MONTHS_ZH = ["1月","2月","3月","4月","5月","6月",
+                 "7月","8月","9月","10月","11月","12月"]
+
+    fig_yr1 = go.Figure()
+    # 歷年均值（灰色虛線）
+    fig_yr1.add_trace(go.Scatter(
+        x=MONTHS_ZH, y=hist_mean.values, name="2020–2023 均值",
+        mode="lines", line=dict(color="#AEB6BF", dash="dash", width=2),
+        hovertemplate="<b>%{x}</b><br>歷年均值：%{y:.1f} 件<extra></extra>",
+    ))
+    # 2024（藍色實線）
+    fig_yr1.add_trace(go.Scatter(
+        x=MONTHS_ZH, y=cnt24.values, name="2024 實際",
+        mode="lines+markers",
+        line=dict(color="#2471A3", width=2.5),
+        marker=dict(size=7, color="#2471A3"),
+        hovertemplate="<b>%{x}</b><br>2024：%{y} 件<extra></extra>",
+    ))
+    # 2025（紅色實線，只畫有資料的月份）
+    last_m25 = int(_fb25["月"].max()) if not _fb25.empty else 0
+    cnt25_plot = cnt25.copy().astype(float)
+    if last_m25 < 12:
+        cnt25_plot.iloc[last_m25:] = None   # 截斷之後月份
+    fig_yr1.add_trace(go.Scatter(
+        x=MONTHS_ZH, y=cnt25_plot.values, name="2025 實際",
+        mode="lines+markers",
+        line=dict(color="#C0392B", width=2.5),
+        marker=dict(size=7, color="#C0392B"),
+        hovertemplate="<b>%{x}</b><br>2025：%{y:.0f} 件<extra></extra>",
+        connectgaps=False,
+    ))
+    fig_yr1.update_layout(
+        title=None,
+        height=380,
+        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+        legend=dict(orientation="h", y=1.12, x=1, xanchor="right",
+                    font=dict(size=11, color="#2C3E50")),
+        xaxis=dict(
+            title=dict(text="月份", font=AXIS_TITLE_FONT),
+            tickfont=AXIS_TICK_FONT, showgrid=False,
+        ),
+        yaxis=dict(
+            title=dict(text="跌倒件數", font=AXIS_TITLE_FONT),
+            tickfont=AXIS_TICK_FONT,
+            gridcolor=GRID_COLOR, griddash="dot",
+            zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
+            rangemode="tozero",
+        ),
+        hovermode="x unified",
+        margin=dict(t=70, b=60, l=60, r=20),
+    )
+    st.plotly_chart(fig_yr1, use_container_width=True)
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # ── 圖②：各科別 2024 vs 2025 分組橫條圖 ────────────
+    st.markdown('<p class="section-title">② 各科別跌倒件數：2024 vs 2025</p>',
+                unsafe_allow_html=True)
+
+    CMP_DEPTS   = ["精神科","外科","內科","復健科"]
+    last_m25_fb = int(_fb25["月"].max()) if not _fb25.empty else 1
+
+    cmp_data = []
+    for dept in CMP_DEPTS:
+        n24 = (_fb24[DEPT_COL_YR] == dept).sum()
+        n25 = (_fb25[DEPT_COL_YR] == dept).sum()
+        cmp_data.append({"科別": dept, "2024": n24, "2025": n25})
+    df_cmp = pd.DataFrame(cmp_data).sort_values("2024", ascending=True)
+
+    fig_yr2 = go.Figure()
+    # 2024（藍色）
+    fig_yr2.add_trace(go.Bar(
+        name="2024",
+        y=df_cmp["科別"],
+        x=df_cmp["2024"],
+        orientation="h",
+        marker_color="#2471A3",
+        marker_opacity=0.85,
+        text=df_cmp["2024"].astype(str) + " 件",
+        textposition="outside",
+        textfont=dict(size=10, color="#1C2833", family="Arial"),
+        hovertemplate="<b>%{y}</b><br>2024：%{x} 件<extra></extra>",
+    ))
+    # 2025（紅色）
+    fig_yr2.add_trace(go.Bar(
+        name="2025",
+        y=df_cmp["科別"],
+        x=df_cmp["2025"],
+        orientation="h",
+        marker_color="#C0392B",
+        marker_opacity=0.80,
+        text=df_cmp["2025"].astype(str) + " 件",
+        textposition="outside",
+        textfont=dict(size=10, color="#C0392B", family="Arial Bold"),
+        hovertemplate="<b>%{y}</b><br>2025：%{x} 件<extra></extra>",
+    ))
+    max_val = max(df_cmp["2024"].max(), df_cmp["2025"].max())
+    fig_yr2.update_layout(
+        title=None,
+        barmode="group",
+        height=380,
+        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+        legend=dict(orientation="h", y=1.12, x=1, xanchor="right",
+                    font=dict(size=11, color="#2C3E50")),
+        xaxis=dict(
+            title=dict(text="跌倒件數", font=AXIS_TITLE_FONT),
+            tickfont=AXIS_TICK_FONT,
+            range=[0, max_val * 1.4],
+            gridcolor=GRID_COLOR, griddash="dot",
+            zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
+        ),
+        yaxis=dict(
+            title=dict(text="科別", font=AXIS_TITLE_FONT),
+            tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+            automargin=True,
+        ),
+        margin=dict(t=70, b=60, l=80, r=120),
+        hovermode="y unified",
+    )
+    st.plotly_chart(fig_yr2, use_container_width=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+
+
+
+    # ════════════════════════════════════════════════════════════
+    #  月趨勢 / 類別趨勢 / 年資分布
     # ════════════════════════════════════════════════════════════
     st.markdown("""<div style='background:#F0F3F4;border-radius:8px;
         padding:10px 16px;margin-bottom:12px'>
       <span style='font-size:14px;font-weight:700;color:#2C3E50'>
-        📊 Level 4 — 月趨勢 · 事件類別趨勢 · 通報者年資分布
+        📊 月趨勢 · 事件類別趨勢 · 通報者年資分布
       </span>
       <span style='font-size:11px;color:#5D6D7E;margin-left:8px'>
         每月件數與發生率 · 各類別堆疊趨勢 · 工作年資與 SAC 分布
@@ -1420,298 +1713,6 @@ with _tab1:
             st.info("目前篩選條件下無工作年資資料。")
     else:
         st.markdown(f'<div style="background:#FFF3CD;border-left:4px solid #F39C12;padding:10px 14px;border-radius:4px;color:#7D4700;font-size:13px">⚠️ 找不到欄位：{seniority_col}</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-with _tab2:
-
-
-    # ════════════════════════════════════════════════════════════
-    #  PAGE 2：長期趨勢與深度比較
-    # ════════════════════════════════════════════════════════════
-    st.markdown(f"""
-    <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
-                padding:14px 22px;border-radius:10px;margin-bottom:14px'>
-      <h2 style='color:#FFFFFF;margin:0;font-size:19px;font-weight:700'>
-        📈 長期趨勢與深度比較
-      </h2>
-      <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
-        年度比較 · 月趨勢 · 管制圖 · 工作年資 · 診斷特徵 · 風險因子
-        ｜篩選期間 {{start_m}} ～ {{end_m}}
-      </p>
-    </div>""", unsafe_allow_html=True)
-
-    # ── 年度比較區塊 ─────────────────────────────────────────
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.markdown(f"""
-    <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
-                padding:12px 20px;border-radius:8px;margin-bottom:14px'>
-      <h3 style='color:#FFFFFF;margin:0;font-size:17px;font-weight:700'>
-        📅 年度比較分析（2024 vs 2025）
-      </h3>
-      <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
-        全院層級・不受科別篩選影響・範圍：{inc_ltc}
-      </p>
-    </div>""", unsafe_allow_html=True)
-
-    # ── 4個指標卡（含紅綠燈警示 + Tooltip 定義）────────────────
-    def _kpi_card(label, value, delta_val, delta_txt, up_is_bad=True, tooltip=""):
-        """
-        醫療專業 KPI 卡片
-        - 越低越好 (up_is_bad=True)：上升→紅燈、下降→綠燈
-        - 越高越好 (up_is_bad=False)：上升→綠燈、下降→紅燈
-        - tooltip: 右上角懸停說明（分子分母定義）
-        """
-        if delta_val > 0:
-            arrow  = "▲"
-            d_color = "#C0392B" if up_is_bad else "#1E8449"
-            d_bg    = "#FADBD8" if up_is_bad else "#D5F5E3"
-            led     = "#E74C3C" if up_is_bad else "#27AE60"   # 左邊指示條顏色
-            status  = "⛔" if up_is_bad else "✅"
-        elif delta_val < 0:
-            arrow  = "▼"
-            d_color = "#1E8449" if up_is_bad else "#C0392B"
-            d_bg    = "#D5F5E3" if up_is_bad else "#FADBD8"
-            led     = "#27AE60" if up_is_bad else "#E74C3C"
-            status  = "✅" if up_is_bad else "⛔"
-        else:
-            arrow, d_color, d_bg = "─", "#7F8C8D", "#F2F3F4"
-            led    = "#AEB6BF"
-            status = "➖"
-
-        # 數值字體在指標惡化時加粗強調
-        val_weight = "900" if (up_is_bad and delta_val > 0) or (not up_is_bad and delta_val < 0) else "800"
-        val_color  = "#C0392B" if (up_is_bad and delta_val > 0) else "#1C2833"
-
-        if tooltip:
-            # 清理 tooltip 文字：移除換行、單引號、雙引號，避免破壞 HTML 屬性
-            _tip_clean = (tooltip
-                          .replace("\n", " ")
-                          .replace("'", "")
-                          .replace('"', "")
-                          .replace("=", "＝")
-                          .replace("<", "＜")
-                          .replace(">", "＞"))
-            tooltip_html = (
-                f'<div title="{_tip_clean}" '
-                f'style="position:absolute;top:10px;right:12px;'
-                f'width:18px;height:18px;background:#EBF5FB;border-radius:50%;'
-                f'display:flex;align-items:center;justify-content:center;'
-                f'font-size:11px;color:#2E86C1;cursor:help;'
-                f'border:1px solid #AED6F1;font-weight:700;">ℹ</div>'
-            )
-        else:
-            tooltip_html = ""
-
-        return f"""
-    <div style='background:#FFFFFF;border-left:5px solid {led};border-radius:10px;
-                padding:16px 18px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.09);
-                position:relative;min-height:110px'>
-      {tooltip_html}
-      <div style='font-size:11px;color:#5D6D7E;font-weight:700;
-                  letter-spacing:0.4px;margin-bottom:8px;padding-right:24px'>
-        {status} {label}
-      </div>
-      <div style='font-size:32px;font-weight:{val_weight};color:{val_color};
-                  line-height:1.1;letter-spacing:-0.5px'>{value}</div>
-      <div style='font-size:11px;font-weight:700;color:{d_color};
-                  background:{d_bg};border-radius:4px;
-                  padding:3px 8px;display:inline-block;margin-top:8px'>
-        {arrow} {delta_txt}
-      </div>
-    </div>"""
-
-    # 指標定義 Tooltip
-    TOOLTIP_INJ   = "跌倒有傷害率 = 有傷害件數 ÷ 跌倒總件數\n傷害判斷：病人健康影響程度(彙總) = 有傷害"
-    TOOLTIP_PSYCH = "精神科跌倒占比 = 精神科跌倒件數 ÷ 全院跌倒總件數"
-    TOOLTIP_MID   = "中度以上傷害率 = 外科+內科中，中度/重度/極重度/死亡件數 ÷ 外科+內科跌倒總件數"
-    TOOLTIP_HARM  = "傷害行為件數 = 事件大類為「傷害」的通報件數（全院）"
-
-    mk1, mk2, mk3, mk4 = st.columns(4)
-    with mk1:
-        delta_inj = round(v25_inj - v24_inj, 2)
-        st.markdown(_kpi_card(
-            "跌倒有傷害率",
-            f"{v25_inj:.2f}%",
-            delta_inj,
-            f"{delta_inj:+.2f}% vs 2024（{v24_inj:.2f}%）",
-            up_is_bad=True, tooltip=TOOLTIP_INJ,
-        ), unsafe_allow_html=True)
-    with mk2:
-        delta_psych = round(v25_psych - v24_psych, 2)
-        st.markdown(_kpi_card(
-            "精神科跌倒占比",
-            f"{v25_psych:.2f}%",
-            delta_psych,
-            f"{delta_psych:+.2f}% vs 2024（{v24_psych:.2f}%）",
-            up_is_bad=True, tooltip=TOOLTIP_PSYCH,
-        ), unsafe_allow_html=True)
-    with mk3:
-        delta_mid = round(v25_mid - v24_mid, 2)
-        st.markdown(_kpi_card(
-            "中度以上傷害率（外科+內科）",
-            f"{v25_mid:.2f}%",
-            delta_mid,
-            f"{delta_mid:+.2f}% vs 2024（{v24_mid:.2f}%）",
-            up_is_bad=True, tooltip=TOOLTIP_MID,
-        ), unsafe_allow_html=True)
-    with mk4:
-        delta_harm = n25_harm - n24_harm
-        st.markdown(_kpi_card(
-            "傷害行為年件數",
-            f"{n25_harm} 件",
-            delta_harm,
-            f"{delta_harm:+d} 件 vs 2024（{n24_harm}件）",
-            up_is_bad=True, tooltip=TOOLTIP_HARM,
-        ), unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── 圖①：跌倒月份趨勢比較折線圖 ─────────────────────────
-    st.markdown('<p class="section-title">① 跌倒事件月份趨勢比較（2024 vs 2025 vs 歷年均值）</p>',
-                unsafe_allow_html=True)
-
-    # 各年月份件數
-    def _monthly_counts(df, yr):
-        sub = df[df["年"] == yr]
-        return sub.groupby("月").size().reindex(range(1,13), fill_value=0)
-
-    cnt24  = _monthly_counts(_fb, 2024)
-    cnt25  = _monthly_counts(_fb, 2025)
-    # 2020-2023 歷年平均
-    hist_mean = pd.Series(0.0, index=range(1,13))
-    hist_yrs  = [y for y in [2020,2021,2022,2023] if y in _fb["年"].values]
-    if hist_yrs:
-        hist_mean = pd.concat(
-            [_monthly_counts(_fb, y) for y in hist_yrs], axis=1
-        ).mean(axis=1)
-
-    MONTHS_ZH = ["1月","2月","3月","4月","5月","6月",
-                 "7月","8月","9月","10月","11月","12月"]
-
-    fig_yr1 = go.Figure()
-    # 歷年均值（灰色虛線）
-    fig_yr1.add_trace(go.Scatter(
-        x=MONTHS_ZH, y=hist_mean.values, name="2020–2023 均值",
-        mode="lines", line=dict(color="#AEB6BF", dash="dash", width=2),
-        hovertemplate="<b>%{x}</b><br>歷年均值：%{y:.1f} 件<extra></extra>",
-    ))
-    # 2024（藍色實線）
-    fig_yr1.add_trace(go.Scatter(
-        x=MONTHS_ZH, y=cnt24.values, name="2024 實際",
-        mode="lines+markers",
-        line=dict(color="#2471A3", width=2.5),
-        marker=dict(size=7, color="#2471A3"),
-        hovertemplate="<b>%{x}</b><br>2024：%{y} 件<extra></extra>",
-    ))
-    # 2025（紅色實線，只畫有資料的月份）
-    last_m25 = int(_fb25["月"].max()) if not _fb25.empty else 0
-    cnt25_plot = cnt25.copy().astype(float)
-    if last_m25 < 12:
-        cnt25_plot.iloc[last_m25:] = None   # 截斷之後月份
-    fig_yr1.add_trace(go.Scatter(
-        x=MONTHS_ZH, y=cnt25_plot.values, name="2025 實際",
-        mode="lines+markers",
-        line=dict(color="#C0392B", width=2.5),
-        marker=dict(size=7, color="#C0392B"),
-        hovertemplate="<b>%{x}</b><br>2025：%{y:.0f} 件<extra></extra>",
-        connectgaps=False,
-    ))
-    fig_yr1.update_layout(
-        title=None,
-        height=380,
-        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-        legend=dict(orientation="h", y=1.12, x=1, xanchor="right",
-                    font=dict(size=11, color="#2C3E50")),
-        xaxis=dict(
-            title=dict(text="月份", font=AXIS_TITLE_FONT),
-            tickfont=AXIS_TICK_FONT, showgrid=False,
-        ),
-        yaxis=dict(
-            title=dict(text="跌倒件數", font=AXIS_TITLE_FONT),
-            tickfont=AXIS_TICK_FONT,
-            gridcolor=GRID_COLOR, griddash="dot",
-            zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
-            rangemode="tozero",
-        ),
-        hovermode="x unified",
-        margin=dict(t=70, b=60, l=60, r=20),
-    )
-    st.plotly_chart(fig_yr1, use_container_width=True)
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # ── 圖②：各科別 2024 vs 2025 分組橫條圖 ────────────
-    st.markdown('<p class="section-title">② 各科別跌倒件數：2024 vs 2025</p>',
-                unsafe_allow_html=True)
-
-    CMP_DEPTS   = ["精神科","外科","內科","復健科"]
-    last_m25_fb = int(_fb25["月"].max()) if not _fb25.empty else 1
-
-    cmp_data = []
-    for dept in CMP_DEPTS:
-        n24 = (_fb24[DEPT_COL_YR] == dept).sum()
-        n25 = (_fb25[DEPT_COL_YR] == dept).sum()
-        cmp_data.append({"科別": dept, "2024": n24, "2025": n25})
-    df_cmp = pd.DataFrame(cmp_data).sort_values("2024", ascending=True)
-
-    fig_yr2 = go.Figure()
-    # 2024（藍色）
-    fig_yr2.add_trace(go.Bar(
-        name="2024",
-        y=df_cmp["科別"],
-        x=df_cmp["2024"],
-        orientation="h",
-        marker_color="#2471A3",
-        marker_opacity=0.85,
-        text=df_cmp["2024"].astype(str) + " 件",
-        textposition="outside",
-        textfont=dict(size=10, color="#1C2833", family="Arial"),
-        hovertemplate="<b>%{y}</b><br>2024：%{x} 件<extra></extra>",
-    ))
-    # 2025（紅色）
-    fig_yr2.add_trace(go.Bar(
-        name="2025",
-        y=df_cmp["科別"],
-        x=df_cmp["2025"],
-        orientation="h",
-        marker_color="#C0392B",
-        marker_opacity=0.80,
-        text=df_cmp["2025"].astype(str) + " 件",
-        textposition="outside",
-        textfont=dict(size=10, color="#C0392B", family="Arial Bold"),
-        hovertemplate="<b>%{y}</b><br>2025：%{x} 件<extra></extra>",
-    ))
-    max_val = max(df_cmp["2024"].max(), df_cmp["2025"].max())
-    fig_yr2.update_layout(
-        title=None,
-        barmode="group",
-        height=380,
-        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-        legend=dict(orientation="h", y=1.12, x=1, xanchor="right",
-                    font=dict(size=11, color="#2C3E50")),
-        xaxis=dict(
-            title=dict(text="跌倒件數", font=AXIS_TITLE_FONT),
-            tickfont=AXIS_TICK_FONT,
-            range=[0, max_val * 1.4],
-            gridcolor=GRID_COLOR, griddash="dot",
-            zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
-        ),
-        yaxis=dict(
-            title=dict(text="科別", font=AXIS_TITLE_FONT),
-            tickfont=dict(size=12, color="#2C3E50", family="Arial"),
-            automargin=True,
-        ),
-        margin=dict(t=70, b=60, l=80, r=120),
-        hovermode="y unified",
-    )
-    st.plotly_chart(fig_yr2, use_container_width=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-
 
 
     # ════════════════════════════════════════════════════════════
