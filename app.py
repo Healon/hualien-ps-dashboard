@@ -2025,73 +2025,111 @@ with _tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── 月趨勢：無陪伴件數長條 + 有陪伴率折線 ───────────────
-    st.markdown('<p class="section-title">📈 月別趨勢：無陪伴跌倒件數 vs 有陪伴跌倒率</p>',
+    # ── 無陪伴跌倒件數月趨勢圖（長條 + 移動平均 + P75/P90 雙層警戒線）
+    st.markdown('<p class="section-title">📊 無陪伴跌倒件數月趨勢</p>',
                 unsafe_allow_html=True)
     st.caption(
-        "左軸（橘色長條）= 無陪伴跌倒絕對件數，應持續下降才代表介入有效；"
-        "右軸（藍色折線）= 有陪伴跌倒率（有陪伴件數 ÷ 總跌倒件數），"
-        "兩者需搭配判讀，避免因分母縮小造成比率誤判"
+        "橘色長條 = 每月無陪伴跌倒件數；紫色折線 = 3 個月移動平均；"
+        "🟡 黃色虛線 = P75 警戒（超過歷史 75% 月份）；"
+        "🔴 紅色虛線 = P90 嚴重警示（超過歷史 90% 月份）"
     )
 
     if _COMP_EVENT in df_fall_base.columns:
-        # 全期月別資料（不受時間篩選影響，顯示完整趨勢）
-        _tr_all = df_fall_base.copy()
-        _tr_all["年月顯示"] = _tr_all["年月"].str.replace("-", "/", regex=False)
+        _tr_no = (df_fall_base[df_fall_base[_COMP_EVENT] == "無"]
+                  .groupby("年月").size()
+                  .reset_index(name="件數")
+                  .sort_values("年月"))
+        _tr_no["年月顯示"] = _tr_no["年月"].str.replace("-", "/", regex=False)
+        _tr_no["3月均"]   = _tr_no["件數"].rolling(3, min_periods=1).mean().round(1)
 
-        _tr_grp = (_tr_all.groupby(["年月", "年月顯示", _COMP_EVENT])
-                          .size().reset_index(name="件數"))
-        _tr_no  = (_tr_grp[_tr_grp[_COMP_EVENT]=="無"]
-                   .set_index("年月")[["年月顯示","件數"]])
-        _tr_yes = (_tr_grp[_tr_grp[_COMP_EVENT]=="有"]
-                   .set_index("年月")["件數"])
-        _tr_tot = (_tr_all.groupby("年月").size().rename("總件數"))
+        # 百分位數警戒線（無母數，不假設常態分布）
+        import numpy as np
+        _cl_val  = float(_tr_no["件數"].mean())
+        _p50_val = float(_tr_no["件數"].median())
+        _p75_val = float(np.percentile(_tr_no["件數"], 75))
+        _p90_val = float(np.percentile(_tr_no["件數"], 90))
 
-        _tr = _tr_no.join(_tr_yes.rename("有陪伴"), how="outer").join(_tr_tot, how="outer")
-        _tr = _tr.fillna(0).sort_index()
-        _tr["有陪伴率"] = (_tr["有陪伴"] / _tr["總件數"].replace(0, float("nan")) * 100).round(1)
-        _tr["年月顯示"] = _tr["年月顯示"].where(_tr["年月顯示"] != 0,
-                          _tr.index.str.replace("-", "/"))
+        _tr_target = _tr_no[
+            (_tr_no["年月"] >= start_m) & (_tr_no["年月"] <= end_m)
+        ]
+        _tr_p90 = _tr_no[_tr_no["件數"] > _p90_val]   # 嚴重警示（紅點）
+        _tr_p75 = _tr_no[
+            (_tr_no["件數"] > _p75_val) & (_tr_no["件數"] <= _p90_val)
+        ]   # 警戒（黃點）
 
-        # 篩選期間標記（用於紅點標記）
-        _tr_target = _tr[(_tr.index >= start_m) & (_tr.index <= end_m)]
+        fig_trend = go.Figure()
 
-        from plotly.subplots import make_subplots
-        fig_trend = make_subplots(specs=[[{"secondary_y": True}]])
-
-        # 長條：全期無陪伴件數（灰底）
+        # 全期長條（淡橘）
         fig_trend.add_trace(go.Bar(
-            x=_tr["年月顯示"].tolist(),
-            y=_tr["件數"].tolist(),
+            x=_tr_no["年月顯示"], y=_tr_no["件數"],
             name="無陪伴跌倒件數",
-            marker=dict(color="#E67E22", opacity=0.55, line=dict(width=0)),
+            marker=dict(color="#E67E22", opacity=0.45, line=dict(width=0)),
             hovertemplate="<b>%{x}</b><br>無陪伴：%{y} 件<extra></extra>",
-        ), secondary_y=False)
+        ))
 
         # 篩選期間長條加深
         if not _tr_target.empty:
             fig_trend.add_trace(go.Bar(
-                x=_tr_target["年月顯示"].tolist(),
-                y=_tr_target["件數"].tolist(),
+                x=_tr_target["年月顯示"], y=_tr_target["件數"],
                 name=f"本期（{start_m}～{end_m}）",
-                marker=dict(color="#E67E22", opacity=0.95, line=dict(width=0)),
+                marker=dict(color="#E67E22", opacity=0.92, line=dict(width=0)),
                 hovertemplate="<b>%{x}</b>（本期）<br>無陪伴：%{y} 件<extra></extra>",
-            ), secondary_y=False)
+            ))
 
-        # 折線：有陪伴跌倒率
+        # P75～P90 之間：黃色警戒點
+        if not _tr_p75.empty:
+            fig_trend.add_trace(go.Scatter(
+                x=_tr_p75["年月顯示"], y=_tr_p75["件數"],
+                mode="markers", name="P75 警戒",
+                marker=dict(size=10, color="#F39C12", symbol="circle",
+                            line=dict(color="white", width=1.5)),
+                hovertemplate="<b>%{x}</b> 🟡<br>%{y} 件（P75 警戒）<extra></extra>",
+            ))
+
+        # P90 以上：紅色嚴重警示點
+        if not _tr_p90.empty:
+            fig_trend.add_trace(go.Scatter(
+                x=_tr_p90["年月顯示"], y=_tr_p90["件數"],
+                mode="markers", name="P90 嚴重警示",
+                marker=dict(size=11, color="#C0392B", symbol="circle",
+                            line=dict(color="white", width=1.5)),
+                hovertemplate="<b>%{x}</b> 🔴<br>%{y} 件（P90 嚴重警示）<extra></extra>",
+            ))
+
+        # 3個月移動平均
         fig_trend.add_trace(go.Scatter(
-            x=_tr["年月顯示"].tolist(),
-            y=_tr["有陪伴率"].tolist(),
-            name="有陪伴跌倒率（%）",
-            mode="lines+markers",
-            line=dict(color="#2471A3", width=2),
-            marker=dict(size=5, color="#2471A3"),
-            hovertemplate="<b>%{x}</b><br>有陪伴率：%{y:.1f}%<extra></extra>",
-            yaxis="y2",
-        ), secondary_y=True)
+            x=_tr_no["年月顯示"], y=_tr_no["3月均"],
+            mode="lines", name="3 個月移動平均",
+            line=dict(color="#7D3C98", width=2),
+            hovertemplate="<b>%{x}</b><br>3月均：%{y:.1f} 件<extra></extra>",
+        ))
+
+        # 中位數（P50）灰色點線
+        fig_trend.add_hline(
+            y=_p50_val, line_dash="dot", line_color="#AEB6BF", line_width=1.5,
+            annotation_text=f"P50 中位數 {_p50_val:.0f}",
+            annotation_position="top left",
+            annotation_font=dict(size=10, color="#5D6D7E"),
+        )
+
+        # P75 黃色虛線
+        fig_trend.add_hline(
+            y=_p75_val, line_dash="dash", line_color="#F39C12", line_width=1.8,
+            annotation_text=f"P75 警戒 {_p75_val:.0f} 件",
+            annotation_position="bottom right",
+            annotation_font=dict(size=10, color="#B7770D"),
+        )
+
+        # P90 紅色虛線
+        fig_trend.add_hline(
+            y=_p90_val, line_dash="dash", line_color="#C0392B", line_width=1.8,
+            annotation_text=f"P90 嚴重警示 {_p90_val:.0f} 件",
+            annotation_position="top right",
+            annotation_font=dict(size=10, color="#C0392B"),
+        )
 
         fig_trend.update_layout(
-            height=320,
+            height=360,
             barmode="overlay",
             plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
             xaxis=dict(
@@ -2100,23 +2138,42 @@ with _tab2:
                 tickangle=45, showgrid=False,
             ),
             yaxis=dict(
-                title=dict(text="無陪伴跌倒件數", font=dict(size=12, color="#E67E22", family="Arial")),
-                tickfont=dict(size=10, color="#E67E22", family="Arial"),
+                title=dict(text="無陪伴跌倒件數", font=AXIS_TITLE_FONT),
+                tickfont=AXIS_TICK_FONT,
                 gridcolor=GRID_COLOR, griddash="dot",
                 rangemode="tozero",
             ),
-            yaxis2=dict(
-                title=dict(text="有陪伴跌倒率（%）", font=dict(size=12, color="#2471A3", family="Arial")),
-                tickfont=dict(size=10, color="#2471A3", family="Arial"),
-                range=[0, 100], showgrid=False,
-                overlaying="y", side="right",
-            ),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
                         font=dict(size=11, color="#2C3E50")),
-            margin=dict(t=40, b=70, l=70, r=70),
+            margin=dict(t=50, b=70, l=60, r=100),
             bargap=0.15,
         )
         st.plotly_chart(fig_trend, use_container_width=True)
+
+        # 說明文字
+        _over_p90 = int(((_tr_no["件數"] > _p90_val) &
+                         (_tr_no["年月"] >= start_m) &
+                         (_tr_no["年月"] <= end_m)).sum())
+        _over_p75 = int(((_tr_no["件數"] > _p75_val) &
+                         (_tr_no["件數"] <= _p90_val) &
+                         (_tr_no["年月"] >= start_m) &
+                         (_tr_no["年月"] <= end_m)).sum())
+        if _over_p90 > 0:
+            st.markdown(
+                f"<div style='background:#FADBD8;border-left:4px solid #C0392B;"
+                f"padding:8px 14px;border-radius:4px;font-size:12px;color:#922B21'>"
+                f"🔴 本期有 <b>{_over_p90}</b> 個月超出 P90 嚴重警示線（{_p90_val:.0f} 件），"
+                f"建議啟動 RCA 根本原因分析</div>",
+                unsafe_allow_html=True
+            )
+        elif _over_p75 > 0:
+            st.markdown(
+                f"<div style='background:#FEF9E7;border-left:4px solid #F39C12;"
+                f"padding:8px 14px;border-radius:4px;font-size:12px;color:#7D6608'>"
+                f"🟡 本期有 <b>{_over_p75}</b> 個月超出 P75 警戒線（{_p75_val:.0f} 件），"
+                f"建議加強陪伴介入措施追蹤</div>",
+                unsafe_allow_html=True
+            )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
