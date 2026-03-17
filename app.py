@@ -1976,8 +1976,11 @@ with _tab2:
 
     # df_fall_base 在 load_data 中已 merge 傷害程度欄位，直接篩選時間區間
     # 不可再 join df_all，否則欄位名稱產生 _x/_y 衝突導致計算失敗
-    _cf = df_fall_base[
-        (df_fall_base["年月"] >= start_m) & (df_fall_base["年月"] <= end_m)
+    # 同時依側邊欄「發生單位」篩選（全院 = 不篩單位）
+    _cf_base = (df_fall_base if sel_unit == "全院"
+                else df_fall_base[df_fall_base["單位"] == sel_unit])
+    _cf = _cf_base[
+        (_cf_base["年月"] >= start_m) & (_cf_base["年月"] <= end_m)
     ].copy()
     _cn_total = len(_cf)
 
@@ -2035,7 +2038,10 @@ with _tab2:
     )
 
     if _COMP_EVENT in df_fall_base.columns:
-        _tr_no = (df_fall_base[df_fall_base[_COMP_EVENT] == "無"]
+        # 依側邊欄單位篩選（sel_unit == "全院" 則用全量）
+        _tr_base = (df_fall_base if sel_unit == "全院"
+                    else df_fall_base[df_fall_base["單位"] == sel_unit])
+        _tr_no = (_tr_base[_tr_base[_COMP_EVENT] == "無"]
                   .groupby("年月").size()
                   .reset_index(name="件數")
                   .sort_values("年月"))
