@@ -1955,6 +1955,261 @@ with _tab2:
 
 
     # ════════════════════════════════════════════════════════════
+    #  陪伴者分析：有無陪伴 × 傷害程度 × 活動情境
+    # ════════════════════════════════════════════════════════════
+    st.markdown("""<div style='background:linear-gradient(135deg,#7E5109,#CA6F1E);
+        border-radius:8px;padding:10px 16px;margin-bottom:12px'>
+      <span style='font-size:14px;font-weight:700;color:#FFFFFF'>
+        👥 陪伴者分析
+      </span>
+      <span style='font-size:11px;color:#FAD7A0;margin-left:8px'>
+        事發時有無陪伴 · 傷害嚴重度差異 · 不在場落差 · 活動情境風險
+      </span>
+    </div>""", unsafe_allow_html=True)
+
+    # ── 資料準備 ─────────────────────────────────────────────
+    _COMP_EVENT = "跌倒事件發生對象-事件發生時有無陪伴者"
+    _COMP_DAILY = "跌倒事件發生對象-平日有無陪伴者"
+    _INJ_DETAIL = "病人/住民-事件發生後對病人健康的影響程度"
+    _INJ_SUM    = "病人/住民-事件發生後對病人健康的影響程度(彙總)"
+    _ACT_COL    = "跌倒事件發生對象-事件發生於何項活動過程"
+
+    # 把傷害程度 join 進 dff_fall（已含單位欄位）
+    _inj_lookup = dff[["通報案號", _INJ_DETAIL, _INJ_SUM]].drop_duplicates("通報案號")
+    _cf = dff_fall.merge(_inj_lookup, on="通報案號", how="left")
+    # 套用篩選期間
+    _cf = _cf[(_cf["年月"] >= start_m) & (_cf["年月"] <= end_m)].copy()
+    _cn_total = len(_cf)
+
+    # 事發時有無陪伴
+    _no_comp  = int((_cf[_COMP_EVENT] == "無").sum()) if _COMP_EVENT in _cf.columns else 0
+    _yes_comp = int((_cf[_COMP_EVENT] == "有").sum()) if _COMP_EVENT in _cf.columns else 0
+    _no_pct   = round(_no_comp / max(_cn_total,1) * 100, 1)
+
+    # 不在場落差：平日有陪伴但事發時無陪伴
+    _gap_n = 0
+    if _COMP_DAILY in _cf.columns and _COMP_EVENT in _cf.columns:
+        _gap_n = int(((_cf[_COMP_DAILY]=="有") & (_cf[_COMP_EVENT]=="無")).sum())
+
+    # 無陪伴且有傷害
+    _no_comp_inj = 0
+    if _COMP_EVENT in _cf.columns and _INJ_SUM in _cf.columns:
+        _no_comp_inj = int(((_cf[_COMP_EVENT]=="無") & (_cf[_INJ_SUM]=="有傷害")).sum())
+    _no_comp_inj_pct = round(_no_comp_inj / max(_no_comp,1)*100, 1)
+
+    # ── KPI 三卡（橘色系）────────────────────────────────────
+    _ca1, _ca2, _ca3 = st.columns(3)
+    _cs = ("background:#FFFFFF;border-radius:12px;padding:16px 18px;"
+           "box-shadow:0 2px 10px rgba(0,0,0,0.09);"
+           "border-left:5px solid {c};min-height:96px")
+
+    def _ck(col, title, val, sub, c):
+        col.markdown(
+            f"<div style='{_cs.format(c=c)}'>"
+            f"<div style='font-size:11px;color:#5D6D7E;font-weight:700;"
+            f"letter-spacing:0.5px;margin-bottom:6px'>{title}</div>"
+            f"<div style='font-size:28px;font-weight:900;color:#1C2833;"
+            f"line-height:1.1'>{val}</div>"
+            f"<div style='font-size:11px;color:#85929E;margin-top:4px'>{sub}</div>"
+            f"</div>", unsafe_allow_html=True)
+
+    _ck(_ca1, "🚷 事發時無陪伴佔比",
+        f"{_no_pct:.1f}%",
+        f"共 {_no_comp} 件 ／ 總 {_cn_total} 件", "#E67E22")
+    _ck(_ca2, "⚠️ 陪伴者不在場件數",
+        f"{_gap_n} 件",
+        "平日有陪伴、事發時卻無陪伴者", "#C0392B")
+    _ck(_ca3, "🩹 無陪伴且有傷害",
+        f"{_no_comp_inj_pct:.1f}%",
+        f"無陪伴中 {_no_comp_inj}/{_no_comp} 件有傷害", "#7D3C98")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 第一層：有無陪伴 × 傷害嚴重度堆疊橫條圖 ─────────────
+    if _COMP_EVENT in _cf.columns and _INJ_DETAIL in _cf.columns:
+        _INJ_ORDER  = ["無傷害","輕度","中度","重度","極重度","死亡"]
+        _INJ_COLORS = ["#1E8449","#AED6F1","#F39C12","#E67E22","#C0392B","#7B241C"]
+
+        _ct = (_cf.groupby([_COMP_EVENT, _INJ_DETAIL])
+                  .size().reset_index(name="件數"))
+        _ct = _ct[_ct[_INJ_DETAIL].isin(_INJ_ORDER)]
+
+        st.markdown('<p class="section-title">📊 事發時陪伴狀態 × 傷害嚴重度</p>',
+                    unsafe_allow_html=True)
+        st.caption("同一傷害嚴重度下，無陪伴件數遠多於有陪伴；可評估陪伴介入的效益")
+
+        fig_comp = go.Figure()
+        for inj, color in zip(_INJ_ORDER, _INJ_COLORS):
+            _sub = _ct[_ct[_INJ_DETAIL]==inj]
+            _vals = {row[_COMP_EVENT]: row["件數"] for _, row in _sub.iterrows()}
+            fig_comp.add_trace(go.Bar(
+                name=inj,
+                y=["有陪伴", "無陪伴"],
+                x=[_vals.get("有",0), _vals.get("無",0)],
+                orientation="h",
+                marker=dict(color=color, opacity=0.88, line=dict(width=0)),
+                text=[_vals.get("有",0) if _vals.get("有",0)>0 else "",
+                      _vals.get("無",0) if _vals.get("無",0)>0 else ""],
+                textposition="inside",
+                textfont=dict(size=10, color="white", family="Arial"),
+                hovertemplate=f"<b>{inj}</b>：%{{x}} 件<extra></extra>",
+            ))
+        fig_comp.update_layout(
+            barmode="stack", height=230,
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot"),
+            yaxis=dict(tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                        font=dict(size=10, color="#2C3E50")),
+            margin=dict(t=40, b=40, l=80, r=30),
+            bargap=0.3,
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 第二層：陪伴者類型 + 不在場落差 ─────────────────────
+    _da1, _da2 = st.columns([1, 1.2])
+
+    with _da1:
+        # 陪伴者類型分布（事發時有陪伴的件數）
+        _type_map = {
+            "家屬":     "有無陪伴者-有-家屬",
+            "看護":     "有無陪伴者-有-看護",
+            "工作人員": "有無陪伴者-有-工作人員",
+            "其他":     "有無陪伴者-有-其他",
+        }
+        _type_df = pd.DataFrame([
+            {"類型": lbl, "件數": int(_cf[col].fillna(0).sum())}
+            for lbl, col in _type_map.items()
+            if col in _cf.columns
+        ]).query("件數 > 0").sort_values("件數", ascending=True)
+
+        st.markdown('<p class="section-title">👤 事發時陪伴者類型分布</p>',
+                    unsafe_allow_html=True)
+        st.caption("了解哪類陪伴者最常在場，強化相應的教育訓練")
+
+        if not _type_df.empty:
+            _type_colors = ["#F39C12" if v==_type_df["件數"].max()
+                            else "#FAD7A0" for v in _type_df["件數"]]
+            fig_type = go.Figure(go.Bar(
+                x=_type_df["件數"], y=_type_df["類型"],
+                orientation="h",
+                marker=dict(color=_type_colors, line=dict(width=0)),
+                text=[f"{v} 件" for v in _type_df["件數"]],
+                textposition="outside",
+                textfont=dict(size=11, color="#1C2833", family="Arial"),
+                hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+            ))
+            fig_type.update_layout(
+                height=220, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+                xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                           tickfont=AXIS_TICK_FONT,
+                           gridcolor=GRID_COLOR, griddash="dot",
+                           range=[0, _type_df["件數"].max()*1.35]),
+                yaxis=dict(tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                           automargin=True),
+                margin=dict(t=10, b=40, l=80, r=70),
+            )
+            st.plotly_chart(fig_type, use_container_width=True)
+
+    with _da2:
+        # 不在場落差：平日有陪伴但事發時無陪伴 → 顯示其傷害分布
+        st.markdown('<p class="section-title">⚠️ 陪伴者不在場事件之傷害分布</p>',
+                    unsafe_allow_html=True)
+        st.caption(f"平日有陪伴、事發時卻無人在場的 {_gap_n} 件——這些最可預防")
+
+        if _gap_n > 0 and _INJ_SUM in _cf.columns:
+            _gap_df = _cf[(_cf[_COMP_DAILY]=="有") & (_cf[_COMP_EVENT]=="無")]
+            _gap_inj = _gap_df[_INJ_SUM].value_counts().reset_index()
+            _gap_inj.columns = ["傷害","件數"]
+            _gap_inj_colors = {
+                "有傷害":"#C0392B","無傷害":"#1E8449",
+                "無法判定傷害嚴重程度":"#AEB6BF","跡近錯失":"#F39C12",
+            }
+            fig_gap = go.Figure(go.Pie(
+                labels=_gap_inj["傷害"],
+                values=_gap_inj["件數"],
+                hole=0.50,
+                marker=dict(
+                    colors=[_gap_inj_colors.get(v,"#AEB6BF")
+                            for v in _gap_inj["傷害"]],
+                    line=dict(color="#FFFFFF", width=2),
+                ),
+                textinfo="label+percent",
+                textfont=dict(size=10, color="#1C2833"),
+                hovertemplate="<b>%{label}</b>：%{value} 件（%{percent}）<extra></extra>",
+            ))
+            fig_gap.update_layout(
+                height=220, paper_bgcolor=PAPER_BG, showlegend=False,
+                margin=dict(t=10, b=10, l=10, r=10),
+                annotations=[dict(
+                    text=f"<b>{_gap_n}</b><br>件",
+                    x=0.5, y=0.5,
+                    font=dict(size=16, color="#1C2833"),
+                    showarrow=False,
+                )],
+            )
+            st.plotly_chart(fig_gap, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── 第三層：活動情境 × 陪伴狀態熱力圖 ───────────────────
+    if _COMP_EVENT in _cf.columns and _ACT_COL in _cf.columns:
+        st.markdown('<p class="section-title">🗺 活動情境 × 陪伴狀態（件數熱力圖）</p>',
+                    unsafe_allow_html=True)
+        st.caption("顏色越深 = 該情境無陪伴跌倒越集中 → 優先建立「該情境主動陪伴」介入規範")
+
+        _act_ct = (_cf.groupby([_ACT_COL, _COMP_EVENT])
+                      .size().reset_index(name="件數"))
+        _act_piv = (_act_ct.pivot(index=_ACT_COL, columns=_COMP_EVENT, values="件數")
+                            .fillna(0).astype(int))
+        # 依「無陪伴」件數降冪排列
+        if "無" in _act_piv.columns:
+            _act_piv = _act_piv.sort_values("無", ascending=False)
+
+        _act_text = [[str(v) if v > 0 else "" for v in row]
+                     for row in _act_piv.values]
+
+        fig_act = go.Figure(go.Heatmap(
+            z=_act_piv.values,
+            x=_act_piv.columns.tolist(),
+            y=_act_piv.index.tolist(),
+            text=_act_text,
+            texttemplate="%{text}",
+            textfont=dict(size=11, color="white", family="Arial Bold"),
+            colorscale=[
+                [0.0, "#FEF9E7"],
+                [0.2, "#FAD7A0"],
+                [0.5, "#E67E22"],
+                [1.0, "#7E5109"],
+            ],
+            hovertemplate="<b>%{y}</b> × <b>%{x}</b>：%{z} 件<extra></extra>",
+            colorbar=dict(
+                title=dict(text="件數", font=dict(size=11)),
+                tickfont=dict(size=10),
+                thickness=14, len=0.7,
+            ),
+            xgap=3, ygap=2,
+        ))
+        fig_act.update_layout(
+            height=max(340, len(_act_piv)*30 + 80),
+            paper_bgcolor=PAPER_BG, plot_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="事發時陪伴狀態", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                       side="bottom"),
+            yaxis=dict(title=dict(text="活動情境", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            margin=dict(t=20, b=60, l=140, r=80),
+        )
+        st.plotly_chart(fig_act, use_container_width=True)
+
+
+    # ════════════════════════════════════════════════════════════
     #  🔬 診斷特徵分析
     #  資料：df_all["診斷分類"]  + 傷害程度
     #  篩選器：時間區間 + 側邊欄科別篩選器
