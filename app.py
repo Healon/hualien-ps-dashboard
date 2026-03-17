@@ -1974,8 +1974,9 @@ with _tab2:
     _INJ_SUM    = "病人/住民-事件發生後對病人健康的影響程度(彙總)"
     _ACT_COL    = "跌倒事件發生對象-事件發生於何項活動過程"
 
-    # 把傷害程度 join 進 dff_fall（已含單位欄位）
-    _inj_lookup = dff[["通報案號", _INJ_DETAIL, _INJ_SUM]].drop_duplicates("通報案號")
+    # 傷害程度 lookup 必須從全量 df_all 建立（不受時間/單位篩選影響）
+    # dff 是已篩選資料，若側邊欄選特定單位可能沒有跌倒案號，導致 join 失敗
+    _inj_lookup = df_all[["通報案號", _INJ_DETAIL, _INJ_SUM]].drop_duplicates("通報案號")
     _cf = dff_fall.merge(_inj_lookup, on="通報案號", how="left")
     # 套用篩選期間
     _cf = _cf[(_cf["年月"] >= start_m) & (_cf["年月"] <= end_m)].copy()
