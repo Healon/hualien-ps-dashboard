@@ -627,10 +627,11 @@ if dff.empty:
     st.stop()
 
 
-_tab1, _tab2, _tab3 = st.tabs([
+_tab1, _tab2, _tab3, _tab4 = st.tabs([
     "🎯 即時監控戰情室",
     "📈 長期趨勢與深度比較",
     "💊 藥物安全分析",
+    "⚠️ 傷害行為分析",
 ])
 
 with _tab1:
@@ -3878,6 +3879,457 @@ with _tab3:
     else:
         st.info("目前篩選期間無高警訊藥物事件。")
 
+
+
+
+# ════════════════════════════════════════════════════════════
+#  TAB 4：傷害行為分析
+# ════════════════════════════════════════════════════════════
+with _tab4:
+
+    @st.cache_data
+    def load_harm_data():
+        xl_h = pd.ExcelFile(EXCEL_PATH)
+        df_h  = pd.read_excel(xl_h, sheet_name="109-113傷害")
+        df_a  = pd.read_excel(xl_h, sheet_name="109-113全部")
+        df_a["單位"] = (df_a["通報者資料-通報者服務單位"]
+                        .astype(str).str.strip().str.upper())
+        df_a["年月"] = (pd.to_datetime(df_a["發生日期"], errors="coerce")
+                        .dt.to_period("M").astype(str))
+        _mc = [c for c in [
+            "通報案號","單位","年月",
+            "發生者資料-門診住院日","發生者資料-年齡",
+            "發生者資料-性別","發生者資料-診斷",
+            "病人/住民-事件發生後對病人健康的影響程度(彙總)","SAC",
+        ] if c in df_a.columns]
+        df_h = df_h.merge(df_a[_mc].drop_duplicates("通報案號"),
+                          on="通報案號", how="left")
+        df_h["年月"] = (pd.to_datetime(df_h["發生日期"], errors="coerce")
+                        .dt.to_period("M").astype(str))
+        df_h["發生日期_dt"] = pd.to_datetime(df_h["發生日期"], errors="coerce")
+        df_h["住院日_dt"]   = pd.to_datetime(
+            df_h["發生者資料-門診住院日"], errors="coerce")
+        df_h["住院後天數"]  = (df_h["發生日期_dt"] - df_h["住院日_dt"]).dt.days
+        return df_h
+
+    df_harm_all = load_harm_data()
+
+    _hs, _he = st.session_state["date_range"]
+    _harm_base = (df_harm_all if sel_unit == "全院"
+                  else df_harm_all[df_harm_all["單位"] == sel_unit])
+    _hf = _harm_base[
+        (_harm_base["年月"] >= _hs) & (_harm_base["年月"] <= _he)
+    ].copy()
+    _hn = len(_hf)
+
+    # ── Page Header ────────────────────────────────────────
+    _h_header = (
+        "<div style='background:linear-gradient(135deg,#1C2833,#2E4057);"
+        "padding:14px 22px;border-radius:10px;margin-bottom:14px;"
+        "border-left:5px solid #E74C3C'>"
+        "<h2 style='color:#FFFFFF;margin:0;font-size:19px;font-weight:700'>"
+        "&#9888;&#65039; 傷害行為分析</h2>"
+        f"<p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>"
+        f"身體攻擊 &#183; 自傷 &#183; 自殺企圖 &#183; 可能原因多維分析 &#183; 入院時間風險窗口"
+        f" &#65372; 篩選期間：{_hs} ～ {_he}（共 {_hn} 件）</p>"
+        "</div>"
+    )
+    st.markdown(_h_header, unsafe_allow_html=True)
+
+    # ── KPI 四卡 ──────────────────────────────────────────
+    _TC = {
+        "身體攻擊": "傷害類型-身體攻擊",
+        "自傷":     "傷害類型-自傷",
+        "自殺企圖": "傷害類型-自殺/企圖自殺",
+        "言語衝突": "傷害類型-言語衝突",
+    }
+    _hkpi = {k: int(_hf[v].fillna(0).sum()) if v in _hf.columns else 0
+             for k, v in _TC.items()}
+    _hk1, _hk2, _hk3, _hk4 = st.columns(4)
+    _hks = ("background:#FFFFFF;border-radius:12px;padding:16px 18px;"
+            "box-shadow:0 2px 10px rgba(0,0,0,0.09);"
+            "border-left:5px solid {c};min-height:96px")
+    def _hkc(col, title, val, sub, c):
+        col.markdown(
+            f"<div style='{_hks.format(c=c)}'>"
+            f"<div style='font-size:11px;color:#5D6D7E;font-weight:700;"
+            f"letter-spacing:0.5px;margin-bottom:6px'>{title}</div>"
+            f"<div style='font-size:28px;font-weight:900;color:#1C2833;"
+            f"line-height:1.1'>{val}</div>"
+            f"<div style='font-size:11px;color:#85929E;margin-top:4px'>{sub}</div>"
+            f"</div>", unsafe_allow_html=True)
+    _hkc(_hk1, "&#9888;&#65039; 傷害事件總件數", f"{_hn} 件",
+         f"篩選期 {_hn} / 全期 {len(df_harm_all)} 件", "#E74C3C")
+    _hkc(_hk2, "&#128074; 身體攻擊",
+         f"{_hkpi['身體攻擊']} 件",
+         f"佔比 {round(_hkpi['身體攻擊']/max(_hn,1)*100,1)}%", "#C0392B")
+    _hkc(_hk3, "&#129656; 自傷",
+         f"{_hkpi['自傷']} 件",
+         f"佔比 {round(_hkpi['自傷']/max(_hn,1)*100,1)}%", "#7D3C98")
+    _hkc(_hk4, "&#128680; 自殺/企圖自殺",
+         f"{_hkpi['自殺企圖']} 件",
+         f"佔比 {round(_hkpi['自殺企圖']/max(_hn,1)*100,1)}%", "#922B21")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════
+    #  第一區：傷害類型結構 + 月別趨勢
+    # ════════════════════════════════════════════════════
+    st.markdown(
+        "<div style='background:#F0F3F4;border-radius:8px;"
+        "padding:10px 16px;margin-bottom:12px'>"
+        "<span style='font-size:14px;font-weight:700;color:#2C3E50'>"
+        "&#128202; 傷害類型結構 &#183; 月別趨勢</span></div>",
+        unsafe_allow_html=True)
+
+    _ha1, _ha2 = st.columns([1, 1.4])
+    with _ha1:
+        _tdf = pd.DataFrame([
+            {"類型": k, "件數": _hkpi[k]}
+            for k in ["身體攻擊","自傷","言語衝突","自殺企圖"]
+        ]).sort_values("件數", ascending=True)
+        _tc_map = {"身體攻擊":"#C0392B","自傷":"#7D3C98",
+                   "言語衝突":"#E67E22","自殺企圖":"#922B21"}
+        fig_type_h = go.Figure(go.Bar(
+            x=_tdf["件數"], y=_tdf["類型"], orientation="h",
+            marker=dict(color=[_tc_map.get(t,"#AEB6BF") for t in _tdf["類型"]],
+                        opacity=0.88, line=dict(width=0)),
+            text=[f"{v} 件" for v in _tdf["件數"]], textposition="outside",
+            textfont=dict(size=11, color="#1C2833", family="Arial"),
+            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        ))
+        fig_type_h.update_layout(
+            height=240, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, max(_tdf["件數"].max(),1)*1.35]),
+            yaxis=dict(tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            margin=dict(t=10, b=40, l=80, r=80),
+        )
+        st.markdown('<p class="section-title">各傷害類型件數</p>',
+                    unsafe_allow_html=True)
+        st.plotly_chart(fig_type_h, use_container_width=True)
+
+    with _ha2:
+        _hf["年月顯示"] = _hf["年月"].str.replace("-", "/", regex=False)
+        _m_atk = (_hf.groupby("年月顯示")["傷害類型-身體攻擊"]
+                  .sum().reset_index(name="攻擊"))
+        _m_sih = (_hf.groupby("年月顯示")["傷害類型-自傷"]
+                  .sum().reset_index(name="自傷"))
+        _mtr = _m_atk.merge(_m_sih, on="年月顯示", how="outer").fillna(0)
+        fig_trend_h = go.Figure()
+        fig_trend_h.add_trace(go.Scatter(
+            x=_mtr["年月顯示"], y=_mtr["攻擊"],
+            mode="lines+markers", name="身體攻擊",
+            line=dict(color="#C0392B", width=2), marker=dict(size=5),
+            hovertemplate="<b>%{x}</b><br>攻擊：%{y} 件<extra></extra>",
+        ))
+        fig_trend_h.add_trace(go.Scatter(
+            x=_mtr["年月顯示"], y=_mtr["自傷"],
+            mode="lines+markers", name="自傷",
+            line=dict(color="#7D3C98", width=2), marker=dict(size=5),
+            hovertemplate="<b>%{x}</b><br>自傷：%{y} 件<extra></extra>",
+        ))
+        fig_trend_h.update_layout(
+            height=240, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="年月", font=AXIS_TITLE_FONT),
+                       tickfont=dict(size=9, color="#2C3E50", family="Arial"),
+                       tickangle=45, showgrid=False),
+            yaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR,
+                       griddash="dot", rangemode="tozero"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                        font=dict(size=11)),
+            margin=dict(t=40, b=70, l=50, r=20),
+        )
+        st.markdown('<p class="section-title">攻擊 vs 自傷月別趨勢</p>',
+                    unsafe_allow_html=True)
+        st.caption("可觀察是否有季節性規律（文獻：夏末至秋季攻擊事件偏高）")
+        st.plotly_chart(fig_trend_h, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════
+    #  第二區：入院後天數分布 + 72h 對比
+    # ════════════════════════════════════════════════════
+    st.markdown(
+        "<div style='background:#F0F3F4;border-radius:8px;"
+        "padding:10px 16px;margin-bottom:12px'>"
+        "<span style='font-size:14px;font-weight:700;color:#2C3E50'>"
+        "&#9201;&#65039; 入院後發生時間分析</span>"
+        "<span style='font-size:11px;color:#5D6D7E;margin-left:8px'>"
+        "72小時高風險窗口驗證 &#183; 此資料顯示長期住民為主要族群</span>"
+        "</div>", unsafe_allow_html=True)
+
+    _hb1, _hb2 = st.columns([1.2, 1])
+    with _hb1:
+        _dv = df_harm_all["住院後天數"].dropna()
+        _dv = _dv[_dv >= 0]
+        _dlbls = ["0-3天(72h内)","4-7天","8-14天","15-30天","31天以上"]
+        _dcnts = [
+            int((_dv <= 3).sum()),
+            int(((_dv > 3)  & (_dv <= 7)).sum()),
+            int(((_dv > 7)  & (_dv <= 14)).sum()),
+            int(((_dv > 14) & (_dv <= 30)).sum()),
+            int((_dv > 30).sum()),
+        ]
+        _dbdf = pd.DataFrame({"天數分組":_dlbls,"件數":_dcnts})
+        _dbcol = ["#E74C3C","#E67E22","#F39C12","#AED6F1","#85929E"]
+        fig_days = go.Figure(go.Bar(
+            x=_dbdf["天數分組"], y=_dbdf["件數"],
+            marker=dict(color=_dbcol, opacity=0.88, line=dict(width=0)),
+            text=_dbdf["件數"], textposition="outside",
+            textfont=dict(size=11, color="#1C2833", family="Arial"),
+            hovertemplate="<b>%{x}</b>：%{y} 件<extra></extra>",
+        ))
+        fig_days.update_layout(
+            height=280, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+                       showgrid=False),
+            yaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, max(_dcnts)*1.25]),
+            margin=dict(t=20, b=50, l=50, r=20),
+        )
+        st.markdown('<p class="section-title">入院後天數分布（全期全院）</p>',
+                    unsafe_allow_html=True)
+        st.caption("紅色=72小時高風險窗口；灰色=長期住民（31天+）為最大族群")
+        st.plotly_chart(fig_days, use_container_width=True)
+
+    with _hb2:
+        _d72   = df_harm_all[df_harm_all["住院後天數"].fillna(99) <= 3]
+        _dlate = df_harm_all[df_harm_all["住院後天數"].fillna(-1) > 3]
+        _n72, _nlt = max(len(_d72),1), max(len(_dlate),1)
+        _tkl = [
+            ("身體攻擊","傷害類型-身體攻擊","#C0392B"),
+            ("自傷",    "傷害類型-自傷",    "#7D3C98"),
+            ("言語衝突","傷害類型-言語衝突","#E67E22"),
+            ("自殺企圖","傷害類型-自殺/企圖自殺","#922B21"),
+        ]
+        fig_72 = go.Figure()
+        for lbl, col, color in _tkl:
+            _p72  = round(int(_d72[col].fillna(0).sum())/_n72*100,1) if col in _d72.columns else 0
+            _plt  = round(int(_dlate[col].fillna(0).sum())/_nlt*100,1) if col in _dlate.columns else 0
+            fig_72.add_trace(go.Bar(
+                name=lbl, y=["72h 内","72h 後"],
+                x=[_p72/100, _plt/100], orientation="h",
+                marker=dict(color=color, opacity=0.85, line=dict(width=0)),
+                text=[f"{_p72:.0f}%", f"{_plt:.0f}%"],
+                textposition="inside",
+                textfont=dict(size=10, color="white"),
+                hovertemplate=f"<b>{lbl}</b>：%{{text}}<extra></extra>",
+            ))
+        fig_72.update_layout(
+            barmode="stack", height=200,
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="佔比", font=AXIS_TITLE_FONT),
+                       tickformat=".0%", tickfont=AXIS_TICK_FONT,
+                       gridcolor=GRID_COLOR, griddash="dot"),
+            yaxis=dict(tickfont=dict(size=11, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                        font=dict(size=10)),
+            margin=dict(t=40, b=40, l=70, r=20),
+        )
+        st.markdown('<p class="section-title">72h 内 vs 72h 後：傷害類型佔比</p>',
+                    unsafe_allow_html=True)
+        st.caption("自傷在入院早期佔比較高，部分符合文獻急性期高風險描述")
+        st.plotly_chart(fig_72, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════
+    #  第三區：可能原因五大群（隨篩選連動）
+    # ════════════════════════════════════════════════════
+    st.markdown(
+        "<div style='background:#F0F3F4;border-radius:8px;"
+        "padding:10px 16px;margin-bottom:12px'>"
+        "<span style='font-size:14px;font-weight:700;color:#2C3E50'>"
+        "&#129513; 可能原因分析（隨篩選連動）</span></div>",
+        unsafe_allow_html=True)
+
+    _CGH = [
+        ("病人生理行為","#7D3C98",[
+            "可能原因-受病情影響","可能原因-情緒不穩",
+            "可能原因-病人拒絕服藥或治療","可能原因-物質濫用",
+            "可能原因-其他與病人生理及行為因素相關"]),
+        ("溝通因素","#2471A3",[
+            "可能原因-病友間溝通不良",
+            "可能原因-病人或家屬與醫療團隊溝通不足",
+            "可能原因-衛教提供不足或衛教方式不當",
+            "可能原因-醫療團隊間溝通不足"]),
+        ("人員因素","#C0392B",[
+            "可能原因-人員疏忽","可能原因-臨床訓練問題",
+            "可能原因-未給予適當約束","可能原因-病人評估問題"]),
+        ("工作流程","#E67E22",[
+            "可能原因-作業流程問題",
+            "可能原因-人員工作負荷問題","可能原因-人力問題"]),
+        ("環境因素","#1E8449",[
+            "可能原因-環境安全防護設計問題",
+            "可能原因-環境動線問題","可能原因-照明問題"]),
+    ]
+    _crh = []
+    for grp, color, cols in _CGH:
+        for col in cols:
+            n = int(_hf[col].fillna(0).sum()) if col in _hf.columns else 0
+            if n > 0:
+                _crh.append({"原因大類":grp,"原因":col.replace("可能原因-",""),
+                              "件數":n,"顏色":color})
+    if _crh:
+        _cah = (pd.DataFrame(_crh).sort_values("件數",ascending=False)
+                .head(20).sort_values("件數",ascending=True).reset_index(drop=True))
+        _lgh = "　".join(
+            f"<span style='color:{c};font-weight:700'>&#9632; {g}</span>"
+            for g, c, _ in _CGH)
+        st.markdown(f"<div style='font-size:11px;margin-bottom:8px'>{_lgh}</div>",
+                    unsafe_allow_html=True)
+        fig_cause_h = go.Figure(go.Bar(
+            x=_cah["件數"],
+            y=_cah.apply(lambda r: f"[{r['原因大類']}] {r['原因']}", axis=1),
+            orientation="h",
+            marker=dict(color=_cah["顏色"].tolist(), opacity=0.88, line=dict(width=0)),
+            text=[f"{v} 件" for v in _cah["件數"]], textposition="outside",
+            textfont=dict(size=10, color="#1C2833", family="Arial"),
+            hovertemplate="<b>%{y}</b>：%{x} 件<extra></extra>",
+        ))
+        fig_cause_h.update_layout(
+            height=max(380, len(_cah)*28+80),
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
+                       tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR, griddash="dot",
+                       range=[0, _cah["件數"].max()*1.3]),
+            yaxis=dict(tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+                       automargin=True),
+            margin=dict(t=10, b=40, l=200, r=80),
+        )
+        st.plotly_chart(fig_cause_h, use_container_width=True)
+    else:
+        st.info("目前篩選期間無可能原因資料。")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════
+    #  第四區：攻擊 vs 自傷原因差異（全期全院固定）
+    # ════════════════════════════════════════════════════
+    st.markdown(
+        "<div style='background:#F0F3F4;border-radius:8px;"
+        "padding:10px 16px;margin-bottom:12px'>"
+        "<span style='font-size:14px;font-weight:700;color:#2C3E50'>"
+        "&#9876;&#65039; 身體攻擊 vs 自傷：原因差異對比</span>"
+        "<span style='font-size:11px;color:#5D6D7E;margin-left:8px'>"
+        "全期全院固定基準</span></div>",
+        unsafe_allow_html=True)
+    st.caption("紅色=身體攻擊，紫色=自傷；差異越大代表兩類事件需要不同介入策略")
+
+    _ATK = df_harm_all[df_harm_all["傷害類型-身體攻擊"].fillna(0)==1]
+    _SIH = df_harm_all[df_harm_all["傷害類型-自傷"].fillna(0)==1]
+    _na, _ns = max(len(_ATK),1), max(len(_SIH),1)
+    _dpl = [
+        ("受病情影響",     "可能原因-受病情影響"),
+        ("情緒不穩",       "可能原因-情緒不穩"),
+        ("病友溝通不良",   "可能原因-病友間溝通不良"),
+        ("人員疏忽",       "可能原因-人員疏忽"),
+        ("臨床訓練問題",   "可能原因-臨床訓練問題"),
+        ("病人評估問題",   "可能原因-病人評估問題"),
+        ("未給予適當約束", "可能原因-未給予適當約束"),
+        ("環境安全防護問題","可能原因-環境安全防護設計問題"),
+        ("物質濫用",       "可能原因-物質濫用"),
+        ("拒絕服藥",       "可能原因-病人拒絕服藥或治療"),
+    ]
+    _drl = []
+    for lbl, col in _dpl:
+        _pa = round(int(_ATK[col].fillna(0).sum())/_na*100,1) if col in _ATK.columns else 0
+        _ps = round(int(_SIH[col].fillna(0).sum())/_ns*100,1) if col in _SIH.columns else 0
+        _drl.append({"原因":lbl,"攻擊%":_pa,"自傷%":_ps,"差異":abs(_pa-_ps)})
+    _ddf = (pd.DataFrame(_drl).sort_values("差異",ascending=True)
+            .reset_index(drop=True))
+    fig_diff = go.Figure()
+    fig_diff.add_trace(go.Bar(
+        name="身體攻擊", x=_ddf["攻擊%"], y=_ddf["原因"], orientation="h",
+        marker=dict(color="#C0392B", opacity=0.85, line=dict(width=0)),
+        text=[f"{v:.0f}%" for v in _ddf["攻擊%"]], textposition="outside",
+        textfont=dict(size=10, color="#1C2833", family="Arial"),
+        hovertemplate="<b>攻擊</b> %{y}：%{x:.1f}%<extra></extra>",
+    ))
+    fig_diff.add_trace(go.Bar(
+        name="自傷", x=_ddf["自傷%"], y=_ddf["原因"], orientation="h",
+        marker=dict(color="#7D3C98", opacity=0.60, line=dict(width=0)),
+        text=[f"{v:.0f}%" for v in _ddf["自傷%"]], textposition="outside",
+        textfont=dict(size=10, color="#1C2833", family="Arial"),
+        hovertemplate="<b>自傷</b> %{y}：%{x:.1f}%<extra></extra>",
+    ))
+    fig_diff.update_layout(
+        barmode="group", height=380,
+        plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+        xaxis=dict(title=dict(text="佔比（%）", font=AXIS_TITLE_FONT),
+                   tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR, griddash="dot",
+                   range=[0, 110]),
+        yaxis=dict(tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+                   automargin=True),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                    font=dict(size=11)),
+        margin=dict(t=40, b=40, l=140, r=100),
+        bargap=0.2, bargroupgap=0.05,
+    )
+    st.plotly_chart(fig_diff, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════
+    #  第五區：事件說明高頻詞 Top 15
+    # ════════════════════════════════════════════════════
+    st.markdown(
+        "<div style='background:#F0F3F4;border-radius:8px;"
+        "padding:10px 16px;margin-bottom:12px'>"
+        "<span style='font-size:14px;font-weight:700;color:#2C3E50'>"
+        "&#128172; 事件說明高頻關鍵詞 Top 15</span>"
+        "<span style='font-size:11px;color:#5D6D7E;margin-left:8px'>"
+        "對應 Prevention Bundle 的 Flashpoints 概念</span></div>",
+        unsafe_allow_html=True)
+    st.caption("從事件說明文字萃取高頻關鍵詞，反映最常見的觸發情境")
+
+    if "事件說明" in _hf.columns:
+        import re as _re
+        _STOP = {
+            "的","了","在","是","有","也","都","到","和","與","或","其","該",
+            "已","並","時","被","因","及","上","下","後","前","中","由","對",
+            "病人","個案","護理","護士","護理師","護理人員","發現","立即",
+            "進行","表示","告知","前往","查看","協助","情形","病房","當時",
+            "狀況","事件","可能","原因",
+        }
+        _wc: dict = {}
+        for txt in _hf["事件說明"].dropna():
+            for w in _re.findall(r"[\u4e00-\u9fff]{2,4}", str(txt)):
+                if w not in _STOP:
+                    _wc[w] = _wc.get(w, 0) + 1
+        if _wc:
+            _wdf = (pd.DataFrame(list(_wc.items()), columns=["詞","次數"])
+                    .sort_values("次數", ascending=False).head(15)
+                    .sort_values("次數", ascending=True).reset_index(drop=True))
+            _mxw = _wdf["次數"].max()
+            _wcol = ["#C0392B" if v==_mxw else
+                     "#E74C3C" if v>=_mxw*0.7 else "#AEB6BF"
+                     for v in _wdf["次數"]]
+            fig_words = go.Figure(go.Bar(
+                x=_wdf["次數"], y=_wdf["詞"], orientation="h",
+                marker=dict(color=_wcol, opacity=0.88, line=dict(width=0)),
+                text=_wdf["次數"], textposition="outside",
+                textfont=dict(size=11, color="#1C2833", family="Arial"),
+                hovertemplate="<b>%{y}</b>：%{x} 次<extra></extra>",
+            ))
+            fig_words.update_layout(
+                height=420, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+                xaxis=dict(title=dict(text="出現次數", font=AXIS_TITLE_FONT),
+                           tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR, griddash="dot",
+                           range=[0, _mxw*1.3]),
+                yaxis=dict(tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                           automargin=True),
+                margin=dict(t=10, b=40, l=80, r=80),
+            )
+            st.plotly_chart(fig_words, use_container_width=True)
+        else:
+            st.info("目前篩選期間無事件說明資料。")
 
 
 # ── 頁底 ─────────────────────────────────────────────────────
