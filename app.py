@@ -4064,7 +4064,8 @@ with _tab4:
 
     _hb1, _hb2 = st.columns([1.2, 1])
     with _hb1:
-        _dv = df_harm_all["住院後天數"].dropna()
+        # 入院後天數隨時間區間連動（_hf已篩選）
+        _dv = _hf["住院後天數"].dropna()
         _dv = _dv[_dv >= 0]
         _dlbls = ["0-3天(72h内)","4-7天","8-14天","15-30天","31天以上"]
         _dcnts = [
@@ -4092,9 +4093,9 @@ with _tab4:
                        range=[0, max(_dcnts)*1.25]),
             margin=dict(t=20, b=50, l=50, r=20),
         )
-        st.markdown('<p class="section-title">入院後天數分布（全期全院）</p>',
+        st.markdown('<p class="section-title">入院後天數分布</p>',
                     unsafe_allow_html=True)
-        st.caption("紅色=72小時高風險窗口；灰色=長期住民（31天+）為最大族群")
+        st.caption("紅色=72小時高風險窗口；灰色=長期住民（31天+）為最大族群 ｜ 隨時間區間篩選連動")
         st.plotly_chart(fig_days, use_container_width=True)
 
     with _hb2:
@@ -4277,60 +4278,97 @@ with _tab4:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════
-    #  第五區：事件說明高頻詞 Top 15
+    #  第五區：年齡層 × 傷害類型 熱力圖
     # ════════════════════════════════════════════════════
     st.markdown(
         "<div style='background:#F0F3F4;border-radius:8px;"
         "padding:10px 16px;margin-bottom:12px'>"
         "<span style='font-size:14px;font-weight:700;color:#2C3E50'>"
-        "&#128172; 事件說明高頻關鍵詞 Top 15</span>"
+        "&#128101; 年齡層 × 傷害類型 熱力分析</span>"
         "<span style='font-size:11px;color:#5D6D7E;margin-left:8px'>"
-        "對應 Prevention Bundle 的 Flashpoints 概念</span></div>",
+        "隨篩選連動 &#183; 顏色越深件數越多</span></div>",
         unsafe_allow_html=True)
-    st.caption("從事件說明文字萃取高頻關鍵詞，反映最常見的觸發情境")
+    st.caption("0-20歲自傷佔比高；40歲以上身體攻擊比例相對上升；協助識別各年齡層的主要風險類型")
 
-    if "事件說明" in _hf.columns:
-        import re as _re
-        _STOP = {
-            "的","了","在","是","有","也","都","到","和","與","或","其","該",
-            "已","並","時","被","因","及","上","下","後","前","中","由","對",
-            "病人","個案","護理","護士","護理師","護理人員","發現","立即",
-            "進行","表示","告知","前往","查看","協助","情形","病房","當時",
-            "狀況","事件","可能","原因",
+    _AGE_COL = "發生者資料-年齡"
+    if _AGE_COL in _hf.columns:
+        _hf_age = _hf.copy()
+        _hf_age["年齡層"] = pd.cut(
+            pd.to_numeric(_hf_age[_AGE_COL], errors="coerce"),
+            bins=[0, 20, 40, 60, 200],
+            labels=["0-20歲","20-40歲","40-60歲","60歲以上"],
+            right=False,
+        )
+        _age_type_cols = {
+            "身體攻擊": "傷害類型-身體攻擊",
+            "自傷":     "傷害類型-自傷",
+            "言語衝突": "傷害類型-言語衝突",
+            "自殺企圖": "傷害類型-自殺/企圖自殺",
         }
-        _wc: dict = {}
-        for txt in _hf["事件說明"].dropna():
-            for w in _re.findall(r"[\u4e00-\u9fff]{2,4}", str(txt)):
-                if w not in _STOP:
-                    _wc[w] = _wc.get(w, 0) + 1
-        if _wc:
-            _wdf = (pd.DataFrame(list(_wc.items()), columns=["詞","次數"])
-                    .sort_values("次數", ascending=False).head(15)
-                    .sort_values("次數", ascending=True).reset_index(drop=True))
-            _mxw = _wdf["次數"].max()
-            _wcol = ["#C0392B" if v==_mxw else
-                     "#E74C3C" if v>=_mxw*0.7 else "#AEB6BF"
-                     for v in _wdf["次數"]]
-            fig_words = go.Figure(go.Bar(
-                x=_wdf["次數"], y=_wdf["詞"], orientation="h",
-                marker=dict(color=_wcol, opacity=0.88, line=dict(width=0)),
-                text=_wdf["次數"], textposition="outside",
-                textfont=dict(size=11, color="#1C2833", family="Arial"),
-                hovertemplate="<b>%{y}</b>：%{x} 次<extra></extra>",
-            ))
-            fig_words.update_layout(
-                height=420, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-                xaxis=dict(title=dict(text="出現次數", font=AXIS_TITLE_FONT),
-                           tickfont=AXIS_TICK_FONT, gridcolor=GRID_COLOR, griddash="dot",
-                           range=[0, _mxw*1.3]),
-                yaxis=dict(tickfont=dict(size=12, color="#2C3E50", family="Arial"),
-                           automargin=True),
-                margin=dict(t=10, b=40, l=80, r=80),
-            )
-            st.plotly_chart(fig_words, use_container_width=True)
-        else:
-            st.info("目前篩選期間無事件說明資料。")
+        # 建立 年齡層 × 傷害類型 矩陣
+        _age_rows = []
+        for age_lbl in ["0-20歲","20-40歲","40-60歲","60歲以上"]:
+            _sub = _hf_age[_hf_age["年齡層"] == age_lbl]
+            for type_lbl, col in _age_type_cols.items():
+                _n = int(_sub[col].fillna(0).sum()) if col in _sub.columns else 0
+                _age_rows.append({"年齡層": age_lbl, "傷害類型": type_lbl, "件數": _n})
+        _age_df = pd.DataFrame(_age_rows)
+        _age_piv = _age_df.pivot(index="年齡層", columns="傷害類型", values="件數").fillna(0)
+        # 保持年齡順序
+        _age_order = ["0-20歲","20-40歲","40-60歲","60歲以上"]
+        _col_order  = ["身體攻擊","自傷","言語衝突","自殺企圖"]
+        _age_piv = _age_piv.reindex(index=_age_order,
+                                     columns=[c for c in _col_order if c in _age_piv.columns])
 
+        _age_text = [[str(int(v)) if v > 0 else "" for v in row]
+                     for row in _age_piv.values]
+
+        fig_age_hm = go.Figure(go.Heatmap(
+            z=_age_piv.values,
+            x=_age_piv.columns.tolist(),
+            y=_age_piv.index.tolist(),
+            text=_age_text,
+            texttemplate="%{text}",
+            textfont=dict(size=13, color="white", family="Arial Bold"),
+            colorscale=[
+                [0.0,  "#F4F6F6"],
+                [0.15, "#D7BDE2"],
+                [0.5,  "#7D3C98"],
+                [1.0,  "#4A235A"],
+            ],
+            hovertemplate="<b>%{y}</b> × <b>%{x}</b>：%{z} 件<extra></extra>",
+            colorbar=dict(
+                title=dict(text="件數", font=dict(size=11, color="#1C2833")),
+                tickfont=dict(size=10, color="#2C3E50"),
+                thickness=14, len=0.7,
+            ),
+            xgap=4, ygap=3,
+        ))
+        fig_age_hm.update_layout(
+            height=320,
+            paper_bgcolor=PAPER_BG, plot_bgcolor=PAPER_BG,
+            xaxis=dict(
+                title=dict(text="傷害類型", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                side="bottom",
+            ),
+            yaxis=dict(
+                title=dict(text="年齡層", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=12, color="#2C3E50", family="Arial"),
+                automargin=True,
+            ),
+            margin=dict(t=20, b=60, l=100, r=80),
+        )
+        st.plotly_chart(fig_age_hm, use_container_width=True)
+    else:
+        st.info("年齡欄位不存在，無法產生熱力圖。")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+
+    # ════════════════════════════════════════════════════
+    #  第五區：事件說明高頻詞 Top 15
+    # ════════════════════════════════════════════════════
 
 # ── 頁底 ─────────────────────────────────────────────────────
 st.markdown("---")
