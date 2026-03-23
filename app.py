@@ -4017,8 +4017,19 @@ with _tab4:
                   .sum().reset_index(name="攻擊"))
         _m_sih = (_hf.groupby("年月顯示")["傷害類型-自傷"]
                   .sum().reset_index(name="自傷"))
-        _mtr = _m_atk.merge(_m_sih, on="年月顯示", how="outer").fillna(0)
+        _m_tot = (_hf.groupby("年月顯示").size().reset_index(name="總件數"))
+        _mtr = (_m_atk.merge(_m_sih, on="年月顯示", how="outer")
+                      .merge(_m_tot, on="年月顯示", how="outer")
+                      .fillna(0))
         fig_trend_h = go.Figure()
+        # 總件數（最底層，灰色粗線）
+        fig_trend_h.add_trace(go.Scatter(
+            x=_mtr["年月顯示"], y=_mtr["總件數"],
+            mode="lines+markers", name="傷害總件數",
+            line=dict(color="#5D6D7E", width=2.5, dash="dot"),
+            marker=dict(size=4, color="#5D6D7E"),
+            hovertemplate="<b>%{x}</b><br>總件數：%{y} 件<extra></extra>",
+        ))
         fig_trend_h.add_trace(go.Scatter(
             x=_mtr["年月顯示"], y=_mtr["攻擊"],
             mode="lines+markers", name="身體攻擊",
