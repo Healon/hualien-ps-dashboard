@@ -2525,7 +2525,7 @@ with _tab2:
                 return "background-color:#FEF9E7;color:#6D4C00"
             return "color:#1C2833"
 
-        st.dataframe(df_show.style.applymap(_hl, subset=["SAC"]),
+        st.dataframe(df_show.style.map(_hl, subset=["SAC"]),
                      use_container_width=True, height=400)
         st.caption("🔴 SAC 1 死亡　🟠 SAC 2 重大傷害　🟡 SAC 3 輕中度　⬜ SAC 4 無傷害")
 
@@ -4299,15 +4299,15 @@ with _tab4:
         "<span style='font-size:11px;color:#5D6D7E;margin-left:8px'>"
         "隨篩選連動 &#183; 顏色越深件數越多</span></div>",
         unsafe_allow_html=True)
-    st.caption("0-20歲自傷佔比高；40歲以上身體攻擊比例相對上升；協助識別各年齡層的主要風險類型")
+    st.caption("0-18歲自傷佔比高；40歲以上身體攻擊比例相對上升；協助識別各年齡層的主要風險類型")
 
     _AGE_COL = "發生者資料-年齡"
     if _AGE_COL in _hf.columns:
         _hf_age = _hf.copy()
         _hf_age["年齡層"] = pd.cut(
             pd.to_numeric(_hf_age[_AGE_COL], errors="coerce"),
-            bins=[0, 20, 40, 60, 200],
-            labels=["0-20歲","20-40歲","40-60歲","60歲以上"],
+            bins=[0, 18, 40, 60, 200],
+            labels=["0-18歲","18-40歲","40-60歲","60歲以上"],
             right=False,
         )
         _age_type_cols = {
@@ -4318,7 +4318,7 @@ with _tab4:
         }
         # 建立 年齡層 × 傷害類型 矩陣
         _age_rows = []
-        for age_lbl in ["0-20歲","20-40歲","40-60歲","60歲以上"]:
+        for age_lbl in ["0-18歲","18-40歲","40-60歲","60歲以上"]:
             _sub = _hf_age[_hf_age["年齡層"] == age_lbl]
             for type_lbl, col in _age_type_cols.items():
                 _n = int(_sub[col].fillna(0).sum()) if col in _sub.columns else 0
@@ -4326,7 +4326,7 @@ with _tab4:
         _age_df = pd.DataFrame(_age_rows)
         _age_piv = _age_df.pivot(index="年齡層", columns="傷害類型", values="件數").fillna(0)
         # 保持年齡順序
-        _age_order = ["0-20歲","20-40歲","40-60歲","60歲以上"]
+        _age_order = ["0-18歲","18-40歲","40-60歲","60歲以上"]
         _col_order  = ["身體攻擊","自傷","言語衝突","自殺企圖"]
         _age_piv = _age_piv.reindex(index=_age_order,
                                      columns=[c for c in _col_order if c in _age_piv.columns])
