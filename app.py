@@ -394,7 +394,9 @@ def filter_df(base_df=None, use_fall=False):
 
     if not use_fall:
         u = st.session_state["unit"]
-        if u != "全院" and "單位" in df.columns:
+        if u == "W11+W12（精神科）" and "單位" in df.columns:
+            df = df[df["單位"].isin(["W11","W12"])]
+        elif u != "全院" and "單位" in df.columns:
             df = df[df["單位"] == u]
         cat = st.session_state["event_type"]
         if cat != "全部" and "事件大類" in df.columns:
@@ -449,7 +451,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🏬 發生單位")
-    unit_opts = ["全院"] + sorted(
+    unit_opts = ["全院", "W11+W12（精神科）"] + sorted(
         [u for u in df_all["單位"].dropna().unique()
          if u not in ["未知","未填/其他",""]])
     _u = st.session_state["unit"]
@@ -531,7 +533,8 @@ dff      = filter_df()
 dff_fall = filter_df(use_fall=True)
 dff_dx   = filter_df()   # 已含 sel_dept 篩選（filter_df 內處理）
 
-bed_key  = "全院" if sel_unit == "全院" else sel_unit
+bed_key  = ("全院" if sel_unit in ["全院","W11+W12（精神科）"]
+             else sel_unit)
 df_bed_f = df_bed[df_bed["單位"] == bed_key].copy()
 mc = dff.groupby("年月").size().reset_index(name="件數").sort_values("年月")
 mc = mc.merge(df_bed_f[["年月","住院人日數"]], on="年月", how="left")
@@ -1096,7 +1099,7 @@ with _tab1:
     # ════════════════════════════════════════════════════════════
     #  PAGE 1 · 精神科跌倒深度分析（W11 / W12，側邊欄連動）
     # ════════════════════════════════════════════════════════════
-    _PSYCH_WARDS = ["W11", "W12"]
+    _PSYCH_WARDS = ["W11", "W12", "W11+W12（精神科）"]
     if sel_unit in _PSYCH_WARDS:
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1105,7 +1108,7 @@ with _tab1:
             padding:14px 22px;border-radius:10px;margin-bottom:14px;
             border-left:5px solid #7D3C98'>
   <h2 style='color:#FFFFFF;margin:0;font-size:18px;font-weight:700'>
-    🧠 精神科跌倒深度分析（{sel_unit} 專屬）
+    🧠 精神科跌倒深度分析（{"W11 ＋ W12" if sel_unit == "W11+W12（精神科）" else sel_unit} 專屬）
   </h2>
   <p style='color:#D7BDE2;margin:4px 0 0;font-size:11px'>
     W11・W12 急性精神科病房 · 認知行為風險 · 藥物影響 · 月趨勢追蹤
@@ -1979,6 +1982,8 @@ with _tab2:
     # 不可再 join df_all，否則欄位名稱產生 _x/_y 衝突導致計算失敗
     # 同時依側邊欄「發生單位」篩選（全院 = 不篩單位）
     _cf_base = (df_fall_base if sel_unit == "全院"
+                else df_fall_base[df_fall_base["單位"].isin(["W11","W12"])]
+                if sel_unit == "W11+W12（精神科）"
                 else df_fall_base[df_fall_base["單位"] == sel_unit])
     _cf = _cf_base[
         (_cf_base["年月"] >= start_m) & (_cf_base["年月"] <= end_m)
@@ -2039,6 +2044,8 @@ with _tab2:
 
     if _COMP_EVENT in df_fall_base.columns:
         _tr_base = (df_fall_base if sel_unit == "全院"
+                    else df_fall_base[df_fall_base["單位"].isin(["W11","W12"])]
+                    if sel_unit == "W11+W12（精神科）"
                     else df_fall_base[df_fall_base["單位"] == sel_unit])
         _tr_no = (_tr_base[_tr_base[_COMP_EVENT] == "無"]
                   .groupby("年月").size()
@@ -3916,6 +3923,8 @@ with _tab4:
 
     _hs, _he = st.session_state["date_range"]
     _harm_base = (df_harm_all if sel_unit == "全院"
+                  else df_harm_all[df_harm_all["單位"].isin(["W11","W12"])]
+                  if sel_unit == "W11+W12（精神科）"
                   else df_harm_all[df_harm_all["單位"] == sel_unit])
     _hf = _harm_base[
         (_harm_base["年月"] >= _hs) & (_harm_base["年月"] <= _he)
