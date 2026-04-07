@@ -632,7 +632,7 @@ if dff.empty:
 
 _tab1, _tab2, _tab3, _tab4 = st.tabs([
     "🎯 即時監控戰情室",
-    "📈 長期趨勢與深度比較",
+    "📈 跌倒事件分析",
     "💊 藥物安全分析",
     "⚠️ 傷害行為分析",
 ])
@@ -839,6 +839,63 @@ with _tab1:
                 f"{_icon} <b>{lbl}</b>：{_cnt} 件（{_pct:.1f}%）</div>",
                 unsafe_allow_html=True
             )
+
+
+    # ════════════════════════════════════════════════════════════
+    #  PAGE 1 · 每月發生件數與發生率趨勢（Level 2 下方）
+    # ════════════════════════════════════════════════════════════
+    st.markdown("""<div style='background:#F0F3F4;border-radius:8px;
+        padding:10px 16px;margin-bottom:12px'>
+      <span style='font-size:14px;font-weight:700;color:#2C3E50'>
+        📊 每月發生件數與發生率趨勢
+      </span>
+      <span style='font-size:11px;color:#5D6D7E;margin-left:8px'>
+        隨時間區間與單位篩選連動
+      </span>
+    </div>""", unsafe_allow_html=True)
+
+    fig_a1 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig_a1.add_trace(go.Bar(
+        x=mc["年月顯示"], y=mc["件數"], name="發生件數",
+        marker_color="#2C3E50", marker_opacity=0.75,
+        text=mc["件數"],
+        textposition="outside",
+        textfont=dict(size=8, color="#2C3E50", family="Arial"),
+        hovertemplate="<b>%{x}</b><br>件數：%{y} 件<extra></extra>",
+    ), secondary_y=False)
+    fig_a1.add_trace(go.Scatter(
+        x=mc["年月顯示"], y=mc["發生率"], name="發生率(‰)",
+        mode="lines+markers", line=dict(color="#E74C3C", width=2.5),
+        marker=dict(size=5, color="#E74C3C"),
+        hovertemplate="<b>%{x}</b><br>發生率：%{y:.2f}‰<extra></extra>",
+    ), secondary_y=True)
+    fig_a1.update_layout(
+        height=380, plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+        hovermode="x unified",
+        legend=dict(orientation="h", y=1.1, x=1, xanchor="right",
+                    font=dict(size=11, color="#2C3E50")),
+        xaxis=dict(
+            title=dict(text="年月", font=AXIS_TITLE_FONT),
+            tickangle=-45, showgrid=False, tickfont=AXIS_TICK_FONT,
+        ),
+        margin=dict(t=30, b=50),
+        uniformtext=dict(mode="hide", minsize=7),
+    )
+    fig_a1.update_yaxes(
+        title_text="發生件數", title_font=AXIS_TITLE_FONT,
+        tickfont=AXIS_TICK_FONT, secondary_y=False,
+        gridcolor=GRID_COLOR, griddash="dot",
+        zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
+    )
+    fig_a1.update_yaxes(
+        title_text="發生率 (‰)",
+        title_font=dict(size=13, color="#C0392B", family="Arial"),
+        tickfont=dict(size=10, color="#C0392B", family="Arial"),
+        secondary_y=True,
+    )
+    st.plotly_chart(fig_a1, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1357,16 +1414,16 @@ with _tab2:
 
 
     # ════════════════════════════════════════════════════════════
-    #  PAGE 2：長期趨勢與深度比較
+    #  PAGE 2：跌倒事件分析
     # ════════════════════════════════════════════════════════════
     st.markdown(f"""
     <div style='background:linear-gradient(135deg,#1a2e3d,#2C3E50);
                 padding:14px 22px;border-radius:10px;margin-bottom:14px'>
       <h2 style='color:#FFFFFF;margin:0;font-size:19px;font-weight:700'>
-        📈 長期趨勢與深度比較
+        📈 跌倒事件分析
       </h2>
       <p style='color:#AED6F1;margin:4px 0 0;font-size:11px'>
-        年度比較 · 月趨勢 · 管制圖 · 工作年資 · 診斷特徵 · 風險因子
+        跌倒事件深度分析 · 月趨勢 · 管制圖 · 診斷特徵 · 風險因子
         ｜篩選期間 {{start_m}} ～ {{end_m}}
       </p>
     </div>""", unsafe_allow_html=True)
