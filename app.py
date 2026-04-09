@@ -918,6 +918,61 @@ with _tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ── 各單位發生件數長條圖（隨篩選連動）──────────────────────
+    st.markdown('<p class="section-title">🏢 各單位發生件數</p>',
+                unsafe_allow_html=True)
+    st.caption("隨左側時間區間與事件類別篩選連動；依件數降冪排列")
+
+    _unit_cnt = (dff["單位"].value_counts()
+                 .reset_index()
+                 .rename(columns={"單位":"單位","count":"件數"}))
+    if "件數" not in _unit_cnt.columns:
+        _unit_cnt.columns = ["單位","件數"]
+    _unit_cnt = _unit_cnt[
+        ~_unit_cnt["單位"].isin(["未知","未填/其他","NAN",""])
+    ].sort_values("件數", ascending=False).reset_index(drop=True)
+
+    if not _unit_cnt.empty:
+        _u_max = _unit_cnt["件數"].max()
+        _u_q75 = _unit_cnt["件數"].quantile(0.75)
+        _u_colors = [
+            "#E74C3C" if v == _u_max else
+            "#E67E22" if v >= _u_q75 else
+            "#2471A3"
+            for v in _unit_cnt["件數"]
+        ]
+        fig_unit = go.Figure(go.Bar(
+            x=_unit_cnt["單位"],
+            y=_unit_cnt["件數"],
+            marker=dict(color=_u_colors, opacity=0.88, line=dict(width=0)),
+            text=_unit_cnt["件數"],
+            textposition="outside",
+            textfont=dict(size=10, color="#1C2833", family="Arial"),
+            hovertemplate="<b>%{x}</b>：%{y} 件<extra></extra>",
+        ))
+        fig_unit.update_layout(
+            height=320,
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
+            xaxis=dict(
+                title=dict(text="單位", font=AXIS_TITLE_FONT),
+                tickfont=dict(size=10, color="#2C3E50", family="Arial"),
+                showgrid=False,
+                categoryorder="total descending",
+            ),
+            yaxis=dict(
+                title=dict(text="件數", font=AXIS_TITLE_FONT),
+                tickfont=AXIS_TICK_FONT,
+                gridcolor=GRID_COLOR, griddash="dot",
+                zeroline=True, zerolinecolor=ZERO_LINE_COLOR,
+                range=[0, _u_max * 1.25],
+            ),
+            margin=dict(t=20, b=60, l=60, r=20),
+            bargap=0.25,
+        )
+        st.plotly_chart(fig_unit, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════
