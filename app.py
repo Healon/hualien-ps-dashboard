@@ -2274,40 +2274,51 @@ with _tab2:
                   .size().reset_index(name="件數"))
         _ct = _ct[_ct[_INJ_DETAIL].isin(_INJ_ORDER)]
 
-        st.markdown('<p class="section-title">📊 事發時陪伴狀態 × 傷害嚴重度</p>',
+        st.markdown('<p class="section-title">🥧 事發時陪伴狀態 × 傷害嚴重度佔比</p>',
                     unsafe_allow_html=True)
-        st.caption("同一傷害嚴重度下，無陪伴件數遠多於有陪伴；可評估陪伴介入的效益")
+        st.caption("左：無陪伴的傷害嚴重度分布　右：有陪伴的傷害嚴重度分布；比較兩者差異可評估陪伴介入效益")
 
-        fig_comp = go.Figure()
-        for inj, color in zip(_INJ_ORDER, _INJ_COLORS):
-            _sub = _ct[_ct[_INJ_DETAIL]==inj]
-            _vals = {row[_COMP_EVENT]: row["件數"] for _, row in _sub.iterrows()}
-            fig_comp.add_trace(go.Bar(
-                name=inj,
-                y=["有陪伴", "無陪伴"],
-                x=[_vals.get("有",0), _vals.get("無",0)],
-                orientation="h",
-                marker=dict(color=color, opacity=0.88, line=dict(width=0)),
-                text=[_vals.get("有",0) if _vals.get("有",0)>0 else "",
-                      _vals.get("無",0) if _vals.get("無",0)>0 else ""],
-                textposition="inside",
-                textfont=dict(size=10, color="white", family="Arial"),
-                hovertemplate=f"<b>{inj}</b>：%{{x}} 件<extra></extra>",
+        _cp1, _cp2 = st.columns(2)
+        for _col, _label, _comp_val in [(_cp1, "🚷 無陪伴", "無"), (_cp2, "👥 有陪伴", "有")]:
+            _pie_df = _ct[_ct[_COMP_EVENT] == _comp_val].copy()
+            # 補齊所有傷害等級（避免某等級為0時消失）
+            _pie_df = (_pie_df.set_index(_INJ_DETAIL)["件數"]
+                       .reindex(_INJ_ORDER, fill_value=0)
+                       .reset_index())
+            _pie_df.columns = ["傷害等級","件數"]
+            _pie_df = _pie_df[_pie_df["件數"] > 0]
+            _total = _pie_df["件數"].sum()
+
+            fig_pie = go.Figure(go.Pie(
+                labels=_pie_df["傷害等級"],
+                values=_pie_df["件數"],
+                hole=0.45,
+                marker=dict(
+                    colors=[_INJ_COLORS[_INJ_ORDER.index(l)]
+                            for l in _pie_df["傷害等級"]],
+                    line=dict(color="#FFFFFF", width=2),
+                ),
+                textinfo="label+percent",
+                textfont=dict(size=11, color="#1C2833", family="Arial"),
+                hovertemplate="<b>%{label}</b><br>%{value} 件（%{percent}）<extra></extra>",
+                sort=False,
             ))
-        fig_comp.update_layout(
-            barmode="stack", height=230,
-            plot_bgcolor=PLOT_BG, paper_bgcolor=PAPER_BG,
-            xaxis=dict(title=dict(text="件數", font=AXIS_TITLE_FONT),
-                       tickfont=AXIS_TICK_FONT,
-                       gridcolor=GRID_COLOR, griddash="dot"),
-            yaxis=dict(tickfont=dict(size=12, color="#2C3E50", family="Arial"),
-                       automargin=True),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
-                        font=dict(size=10, color="#2C3E50")),
-            margin=dict(t=40, b=40, l=80, r=30),
-            bargap=0.3,
-        )
-        st.plotly_chart(fig_comp, use_container_width=True)
+            fig_pie.update_layout(
+                height=280, paper_bgcolor=PAPER_BG, showlegend=False,
+                margin=dict(t=30, b=10, l=10, r=10),
+                annotations=[dict(
+                    text=f"<b>{_total}</b><br>件",
+                    x=0.5, y=0.5,
+                    font=dict(size=16, color="#1C2833", family="Arial"),
+                    showarrow=False,
+                )],
+                title=dict(
+                    text=_label,
+                    font=dict(size=13, color="#2C3E50", family="Arial"),
+                    x=0.5, xanchor="center",
+                ),
+            )
+            _col.plotly_chart(fig_pie, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
