@@ -2288,11 +2288,11 @@ with _tab2:
                 "（114年03月31日訂定 ／ 114年09月16日第一次修訂）</p>",
                 unsafe_allow_html=True,
             )
-            import base64 as _b64
             _img_html = (
-                f"<img src='data:image/jpeg;base64,{_NURSING_PDF_B64}' "
-                f"style='width:100%;border-radius:6px;"
-                f"box-shadow:0 2px 10px rgba(0,0,0,0.12);' />"
+                "<img src=\"data:image/jpeg;base64,"
+                + _NURSING_PDF_B64
+                + "\" style=\"width:100%;border-radius:6px;"
+                  "box-shadow:0 2px 10px rgba(0,0,0,0.12);\" />"
             )
             st.markdown(_img_html, unsafe_allow_html=True)
 
