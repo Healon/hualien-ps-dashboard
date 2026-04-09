@@ -501,6 +501,9 @@ with st.sidebar:
     # ── 地點 × 傷害程度 下鑽篩選器 ───────────────────────────
     st.markdown("---")
     st.markdown("### 📍 地點 × 傷害程度 下鑽")
+    st.markdown("""<div style='font-size:11px;color:#85C1E9;line-height:1.7;margin-bottom:6px'>
+    ⚠️ 此篩選僅影響 Tab2「地點×傷害熱力圖」下方的<b>個案清單</b>，不影響其他圖表。<br>
+    可直接點擊熱力圖格子自動帶入，或在此手動選取。</div>""", unsafe_allow_html=True)
     _loc_opts  = ["全部地點", "床邊下床", "浴廁", "走廊行走", "椅子輪椅"]
     _inj_disp  = ["全部傷害程度", "無傷害", "輕度", "中度",
                   "重度", "極重度", "死亡", "無法判定"]
@@ -533,9 +536,12 @@ dff      = filter_df()
 dff_fall = filter_df(use_fall=True)
 dff_dx   = filter_df()   # 已含 sel_dept 篩選（filter_df 內處理）
 
-bed_key  = ("全院" if sel_unit in ["全院","W11+W12（精神科）"]
-             else sel_unit)
-df_bed_f = df_bed[df_bed["單位"] == bed_key].copy()
+if sel_unit == "W11+W12（精神科）":
+    df_bed_f = (df_bed[df_bed["單位"].isin(["W11", "W12"])]
+                .groupby("年月", as_index=False)["住院人日數"].sum())
+else:
+    bed_key  = "全院" if sel_unit == "全院" else sel_unit
+    df_bed_f = df_bed[df_bed["單位"] == bed_key].copy()
 mc = dff.groupby("年月").size().reset_index(name="件數").sort_values("年月")
 mc = mc.merge(df_bed_f[["年月","住院人日數"]], on="年月", how="left")
 mc["發生率"] = (mc["件數"] / mc["住院人日數"] * 1000).round(2).fillna(0)
@@ -3477,7 +3483,7 @@ with _tab2:
                 st.markdown(
                     f"<div style='background:#EBF5FB;border-left:4px solid #2E86C1;"
                     f"padding:8px 14px;border-radius:4px;font-size:13px;color:#1A5276'>"
-                    f"🔍 <b>下鑽篩選中：</b> {'　'.join(_tag_parts)} "
+                    f"🔍 <b>下鑽篩選中（僅影響下方個案清單）：</b> {'　'.join(_tag_parts)} "
                     f"（可在側邊欄「地點 × 傷害程度 下鑽」清除）</div>",
                     unsafe_allow_html=True
                 )
