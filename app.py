@@ -893,6 +893,27 @@ with _tab1:
         tickfont=dict(size=10, color="#C0392B", family="Arial"),
         secondary_y=True,
     )
+
+    # ── 政策介入標注：2025/05 住院看護費用補助辦法 ────────────
+    _POLICY_X  = "2025/05"
+    _POLICY_LBL = "住院看護費用補助辦法"
+    # 確認此月份存在於 X 軸資料中才加標注
+    if _POLICY_X in mc["年月顯示"].values:
+        fig_a1.add_vline(
+        x=_POLICY_X,
+        line_dash="dash", line_color="#1E8449", line_width=1.8,
+        )
+        fig_a1.add_annotation(
+        x=_POLICY_X, y=1.02, xref="x", yref="paper",
+        text=f"▼ {_POLICY_LBL}",
+        showarrow=False,
+        font=dict(size=11, color="#1E8449", family="Arial"),
+        bgcolor="rgba(255,255,255,0.85)",
+        bordercolor="#1E8449", borderwidth=1,
+        borderpad=4,
+        xanchor="left",
+        )
+
     st.plotly_chart(fig_a1, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1760,6 +1781,27 @@ with _tab2:
         tickfont=dict(size=10, color="#C0392B", family="Arial"),
         secondary_y=True,
     )
+
+    # ── 政策介入標注：2025/05 住院看護費用補助辦法 ────────────
+    _POLICY_X  = "2025/05"
+    _POLICY_LBL = "住院看護費用補助辦法"
+    # 確認此月份存在於 X 軸資料中才加標注
+    if _POLICY_X in mc["年月顯示"].values:
+        fig_a.add_vline(
+        x=_POLICY_X,
+        line_dash="dash", line_color="#1E8449", line_width=1.8,
+        )
+        fig_a.add_annotation(
+        x=_POLICY_X, y=1.02, xref="x", yref="paper",
+        text=f"▼ {_POLICY_LBL}",
+        showarrow=False,
+        font=dict(size=11, color="#1E8449", family="Arial"),
+        bgcolor="rgba(255,255,255,0.85)",
+        bordercolor="#1E8449", borderwidth=1,
+        borderpad=4,
+        xanchor="left",
+        )
+
     st.plotly_chart(fig_a, use_container_width=True)
 
 
